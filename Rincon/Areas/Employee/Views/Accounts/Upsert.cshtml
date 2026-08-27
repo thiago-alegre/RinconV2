@@ -1,0 +1,67 @@
+@model Rincon.Models.PersonalAccount
+
+@{
+    ViewData["Title"] = "Cuenta personal";
+    var pageTitle = Model.Id == 0
+        ? "Crear cuenta personal"
+        : "Editar cuenta personal";
+}
+
+<form method="post" class="account-upsert-form">
+    <input asp-for="Id" type="hidden" />
+    <input asp-for="Date" type="hidden" />
+
+    <div class="admin-page py-4">
+        <div class="admin-hero mb-4">
+            <h1 class="admin-title h3">@pageTitle</h1>
+        </div>
+
+        <div class="form-card compact-form-card">
+            <div class="compact-form-content">
+                <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label asp-for="FullName" class="form-label"></label>
+                        <input asp-for="FullName" class="form-control" />
+                        <span asp-validation-for="FullName" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label asp-for="DNI" class="form-label"></label>
+                        <input asp-for="DNI" class="form-control" />
+                        <span asp-validation-for="DNI" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label asp-for="Phone" class="form-label"></label>
+                        <input asp-for="Phone" class="form-control" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label asp-for="Address" class="form-label"></label>
+                        <input asp-for="Address" class="form-control" />
+                    </div>
+
+                    <div class="col-12 form-check form-switch">
+                        <input asp-for="isActive" class="form-check-input" />
+                        <label asp-for="isActive" class="form-check-label">Cuenta activa</label>
+                    </div>
+                </div>
+
+                <div class="compact-form-actions">
+                    <a asp-action="Index" class="btn btn-soft-secondary compact-form-action">
+                        Cancelar
+                    </a>
+                    <button class="btn btn-primary compact-form-action">
+                        Guardar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

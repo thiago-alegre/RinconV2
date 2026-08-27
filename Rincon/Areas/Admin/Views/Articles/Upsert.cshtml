@@ -1,0 +1,109 @@
+@model Rincon.Models.Product
+
+@{
+    var isNewProduct = Model.Id == 0;
+    ViewData["Title"] = isNewProduct ? "Crear producto" : "Editar producto";
+}
+
+<form method="post" enctype="multipart/form-data" class="product-upsert-form">
+    <input asp-for="Id" type="hidden" />
+
+    <div class="admin-page py-4">
+        <div class="admin-hero mb-4">
+            <span class="admin-eyebrow">Productos</span>
+            <h1 class="admin-title h3 mb-1">@ViewData["Title"]</h1>
+            <p class="admin-subtitle mb-0">Información comercial y cantidad disponible.</p>
+        </div>
+
+        <div class="form-card compact-form-card">
+            <div class="compact-form-content">
+                <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+                <div class="row g-3">
+                    <div class="col-md-9">
+                        <label asp-for="Name" class="form-label"></label>
+                        <input asp-for="Name" class="form-control" autocomplete="off" />
+                        <span asp-validation-for="Name" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label">Estado</label>
+                        <div class="form-check form-switch product-status-control">
+                            <input asp-for="IsActive" class="form-check-input" />
+                            <label asp-for="IsActive" class="form-check-label">Activo</label>
+                        </div>
+                    </div>
+
+                    <div class="col-12">
+                        <label asp-for="Description" class="form-label"></label>
+                        <textarea asp-for="Description" class="form-control" rows="2"></textarea>
+                        <span asp-validation-for="Description" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label asp-for="PurchasePrice" class="form-label"></label>
+                        <input asp-for="PurchasePrice" class="form-control" inputmode="decimal" />
+                        <span asp-validation-for="PurchasePrice" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label asp-for="SalePrice" class="form-label"></label>
+                        <input asp-for="SalePrice" class="form-control" inputmode="decimal" />
+                        <span asp-validation-for="SalePrice" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label asp-for="Quantity" class="form-label"></label>
+                        <input asp-for="Quantity" type="number" min="0" step="1" class="form-control" />
+                        <span asp-validation-for="Quantity" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-12">
+                        <div class="product-media-grid">
+                            <div>
+                                <label for="image" class="form-label">Foto</label>
+                                <input id="image"
+                                       name="image"
+                                       type="file"
+                                       accept="image/jpeg,image/png,image/webp"
+                                       class="form-control" />
+                                <div class="form-text">Formatos JPG, PNG o WEBP. Máximo 2 MB.</div>
+                                <span asp-validation-for="ImageUrl" class="text-danger"></span>
+                            </div>
+
+                            <div class="product-preview-field">
+                                <span class="form-label">Vista previa</span>
+                                <div class="product-image-preview">
+                                    <img id="productPreviewImage"
+                                         src="@(Model.ImageUrl ?? string.Empty)"
+                                         data-original-src="@(Model.ImageUrl ?? string.Empty)"
+                                         class="product-preview-image @(string.IsNullOrWhiteSpace(Model.ImageUrl) ? "d-none" : string.Empty)"
+                                         alt="Vista previa de la foto de @Model.Name" />
+                                    <div id="productPreviewPlaceholder"
+                                         class="product-preview-placeholder @(string.IsNullOrWhiteSpace(Model.ImageUrl) ? string.Empty : "d-none")">
+                                        <i class="bi bi-image"></i>
+                                        <span>Sin foto</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="compact-form-actions">
+                    <a asp-action="Index" class="btn btn-soft-secondary compact-form-action">
+                        Cancelar
+                    </a>
+                    <button type="submit" class="btn btn-primary compact-form-action">
+                        @(isNewProduct ? "Crear producto" : "Guardar cambios")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script src="~/js/productForm.js" asp-append-version="true"></script>
+}

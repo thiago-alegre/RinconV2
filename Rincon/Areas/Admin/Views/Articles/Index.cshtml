@@ -1,0 +1,41 @@
+@{
+    ViewData["Title"] = "Productos";
+}
+
+<div class="admin-page py-4">
+    <div class="admin-hero admin-hero-toolbar mb-4">
+        <div>
+            <span class="admin-eyebrow">Administración</span>
+            <h1 class="admin-title h3 mb-1">Productos</h1>
+            <p class="admin-subtitle mb-0">Productos, cantidades, costos, precios de venta e imágenes.</p>
+        </div>
+
+        <a asp-action="Upsert" class="btn btn-primary btn-modern">
+            <i class="bi bi-plus-circle me-1"></i>
+            Crear producto
+        </a>
+    </div>
+
+    <div class="content-card">
+        <div class="table-responsive">
+            <table id="tblArticles" class="table custom-table w-100">
+                <thead>
+                    <tr>
+                        <th>Foto</th>
+                        <th>Nombre</th>
+                        <th>Cantidad</th>
+                        <th>Costo</th>
+                        <th>Precio de venta</th>
+                        <th>Margen</th>
+                        <th>Estado</th>
+                        <th></th>
+                    </tr>
+                </thead>
+            </table>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/article.js" asp-append-version="true"></script>
+}

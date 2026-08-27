@@ -1,0 +1,94 @@
+@model Rincon.Models.Expense
+@using Rincon.Utilities.Enums
+@{
+    var isEditing = Model.Id > 0;
+    var formAction = isEditing ? "Edit" : "Create";
+    ViewData["Title"] = isEditing ? "Editar salida" : "Registrar salida";
+}
+
+<form asp-action="@formAction"
+      asp-route-id="@(isEditing ? Model.Id : null)"
+      method="post"
+      class="expense-create-form">
+    <input asp-for="Id" type="hidden" />
+
+    <div class="admin-page py-4">
+        <div class="admin-hero mb-4">
+            <span class="admin-eyebrow">Movimientos</span>
+            <h1 class="admin-title h3 mb-1">@(isEditing ? "Editar salida de dinero" : "Registrar salida de dinero")</h1>
+            <p class="admin-subtitle mb-0">
+                @(isEditing
+                    ? "Corregí los datos del movimiento sin perder su registro original."
+                    : "Separá compras, gastos del negocio y retiros personales.")
+            </p>
+        </div>
+        <div class="form-card compact-form-card">
+            <div class="compact-form-content">
+                <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label asp-for="Date" class="form-label"></label>
+                        <input asp-for="Date"
+                               asp-format="{0:yyyy-MM-ddTHH:mm}"
+                               type="datetime-local"
+                               class="form-control" />
+                        <span asp-validation-for="Date" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label asp-for="Type" class="form-label"></label>
+                        <select asp-for="Type" class="form-select">
+                            <option value="">Seleccione...</option>
+                            <option value="@ExpenseType.CompraMercaderia">Compra de mercadería</option>
+                            <option value="@ExpenseType.GastoNegocio">Gasto del negocio</option>
+                            <option value="@ExpenseType.RetiroPersonal">Retiro personal</option>
+                        </select>
+                        <span asp-validation-for="Type" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label asp-for="PaymentMethod" class="form-label"></label>
+                        <select asp-for="PaymentMethod" class="form-select">
+                            <option value="@PaymentMethod.Efectivo">Efectivo</option>
+                            <option value="@PaymentMethod.Transferencia">Transferencia</option>
+                        </select>
+                        <span asp-validation-for="PaymentMethod" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-8">
+                        <label asp-for="Concept" class="form-label"></label>
+                        <input asp-for="Concept"
+                               class="form-control"
+                               placeholder="Ej.: compra mayorista, envío o retiro de la dueña" />
+                        <span asp-validation-for="Concept" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label asp-for="Amount" class="form-label"></label>
+                        <input asp-for="Amount" class="form-control" inputmode="decimal" />
+                        <span asp-validation-for="Amount" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-12">
+                        <label asp-for="Notes" class="form-label"></label>
+                        <textarea asp-for="Notes" class="form-control" rows="3"></textarea>
+                        <span asp-validation-for="Notes" class="text-danger"></span>
+                    </div>
+                </div>
+
+                <div class="compact-form-actions">
+                    <a asp-action="Index" class="btn btn-soft-secondary compact-form-action">
+                        Cancelar
+                    </a>
+                    <button class="btn btn-primary compact-form-action">
+                        @(isEditing ? "Guardar cambios" : "Guardar movimiento")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

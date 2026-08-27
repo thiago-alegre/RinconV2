@@ -1,0 +1,1000 @@
+﻿@model Rincon.Models.ViewModels.CartVM
+
+@{
+    ViewData["Title"] = "Carrito";
+}
+
+@functions {
+    private string GetUnitText(Rincon.Models.Article article)
+    {
+        if (!article.IsSoldByWeight || article.UnitOfMeasure == "Unidad")
+        {
+            return "unidad";
+        }
+
+        return "kg";
+    }
+
+    private string FormatQuantity(Rincon.Models.Article article, decimal quantity)
+    {
+        if (!article.IsSoldByWeight || article.UnitOfMeasure == "Unidad")
+        {
+            return $"{quantity:N0} unidades";
+        }
+
+        return $"{quantity:N2} kg";
+    }
+
+    private string GetDefaultQuantity(Rincon.Models.Article article)
+    {
+        if (!article.IsSoldByWeight || article.UnitOfMeasure == "Unidad")
+        {
+            return "1";
+        }
+
+        return "0,10";
+    }
+
+    private string GetQuantityInputValue(Rincon.Models.Article article, decimal quantity)
+    {
+        if (!article.IsSoldByWeight || article.UnitOfMeasure == "Unidad")
+        {
+            return quantity.ToString("0");
+        }
+
+        return quantity.ToString("0.##", System.Globalization.CultureInfo.GetCultureInfo("es-AR"));
+    }
+
+    private string GetQuantityUnit(Rincon.Models.Article article)
+    {
+        if (!article.IsSoldByWeight || article.UnitOfMeasure == "Unidad")
+        {
+            return "u";
+        }
+
+        return "kg";
+    }
+}
+
+<section class="cart-page py-4">
+    <div class="cart-hero mb-4">
+        <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
+            <div class="d-flex align-items-center gap-3">
+                <div class="cart-hero-icon">
+                    <i class="fa fa-cart-shopping"></i>
+                </div>
+
+                <div>
+                    <div class="d-flex align-items-center gap-2">
+                        <h3 class="cart-title mb-1">Carrito de venta</h3>
+                        @await Html.PartialAsync("~/Views/Shared/_ScreenHelp.cshtml", new Rincon.Models.ViewModels.ScreenHelpVM
+                        {
+                            Title = "Cómo usar el carrito",
+                            Description = "Esta es la pantalla principal para registrar ventas del local.",
+        Items = new[]
+        {
+            "Escaneá o ingresá el código del producto para agregarlo rápido.",
+            "También podés buscar por nombre, código o categoría si el producto no tiene código a mano.",
+            "Revisá cantidades, stock disponible, medio de pago y vuelto antes de confirmar la venta.",
+            "Para productos no registrados, usá el ingreso manual con descripción y precio."
+        }
+                        })
+                    </div>
+                </div>
+            </div>
+
+            <a href="#searchString" class="btn btn-soft-secondary">
+                <i class="fa fa-magnifying-glass me-2"></i> Buscar producto
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-xl-4 col-lg-6">
+            <div class="action-card h-100">
+                <div class="d-flex align-items-center gap-2 mb-3">
+                    <div class="action-icon">
+                        <i class="fa fa-barcode"></i>
+                    </div>
+                    <div>
+                        <h2 class="action-title mb-0">Escanear producto</h2>
+                        <p class="action-description mb-0">Ingresá un código de barras o QR.</p>
+                    </div>
+                </div>
+
+                <form asp-area="Employee" asp-controller="Cart" asp-action="AddByCode" method="post">
+                    @Html.AntiForgeryToken()
+
+                    <div class="input-group input-group-modern">
+                        <span class="input-group-text">
+                            <i class="fa fa-barcode"></i>
+                        </span>
+
+                        <input type="text"
+                               id="codeText"
+                               name="codeText"
+                               class="form-control"
+                               autocomplete="off"
+                               autofocus
+                               placeholder="Código de barras o QR" />
+                                                      
+                        <button type="submit" class="btn btn-primary btn-modern">
+                            <i class="fa fa-plus me-2"></i> Agregar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="col-xl-4 col-lg-6">
+            <div class="action-card h-100">
+                <div class="d-flex align-items-center gap-2 mb-3">
+                    <div class="action-icon">
+                        <i class="fa fa-magnifying-glass"></i>
+                    </div>
+                    <div>
+                        <h2 class="action-title mb-0">Buscar producto</h2>
+                        <p class="action-description mb-0">Buscá por nombre, código o categoría.</p>
+                    </div>
+                </div>
+
+                <form asp-area="Employee" asp-controller="Cart" asp-action="Index" method="get">
+                    <div class="input-group input-group-modern">
+                        <input type="search"
+                               id="searchString"
+                               name="searchString"
+                               class="form-control"
+                               value="@Model.SearchString"
+                               placeholder="Nombre, código o categoría" />
+
+                        <button type="submit" class="btn btn-outline-primary btn-icon-search">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="col-xl-4">
+            <div class="action-card h-100">
+                <div class="d-flex align-items-center gap-2 mb-3">
+                    <div class="action-icon">
+                        <i class="fa fa-tag"></i>
+                    </div>
+                    <div>
+                        <h2 class="action-title mb-0">Producto suelto</h2>
+                        <p class="action-description mb-0">Agregá un importe manual.</p>
+                    </div>
+                </div>
+
+                <form asp-area="Employee" asp-controller="Cart" asp-action="AddManual" method="post">
+                    @Html.AntiForgeryToken()
+
+                    <div class="input-group input-group-modern">
+                        <input type="text"
+                               name="manualName"
+                               class="form-control"
+                               autocomplete="off"
+                               placeholder="Producto suelto" />
+
+                        <span class="input-group-text">$</span>
+
+                        <input type="text"
+                               name="manualAmountText"
+                               class="form-control quantity-short"
+                               inputmode="decimal"
+                               placeholder="Importe" />
+
+                        <button type="submit" class="btn btn-primary btn-modern">
+                            <i class="fa fa-plus me-2"></i> Agregar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.SearchString))
+    {
+        <div class="content-card mb-4">
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
+                <div>
+                    <span class="section-kicker">Búsqueda</span>
+                    <h2 class="section-title mb-0">Resultados encontrados</h2>
+                </div>
+
+                <a asp-area="Employee" asp-controller="Cart" asp-action="Index" class="btn btn-soft-secondary btn-sm">
+                    <i class="fa fa-xmark me-1"></i> Limpiar búsqueda
+                </a>
+            </div>
+
+            @if (!Model.SearchResults.Any())
+            {
+                <div class="empty-state compact">
+                    <div class="empty-illustration">
+                        <i class="fa fa-magnifying-glass"></i>
+                    </div>
+
+                    <h3>No encontramos ese producto</h3>
+                    <p>
+                        Probá con otro nombre, código o categoría. También podés escanear el código de barras si lo tenés a mano.
+                    </p>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive custom-table-wrapper">
+                    <table class="table table-hover align-middle mb-0 custom-table">
+                        <thead>
+                            <tr>
+                                <th>Producto</th>
+                                <th>Código</th>
+                                <th>Categoría</th>
+                                <th>Precio</th>
+                                <th>Stock</th>
+                                <th class="text-end">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var article in Model.SearchResults)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="fw-semibold">@article.Name</div>
+                                    </td>
+                                    <td>
+                                        <span class="text-muted">@article.Code</span>
+                                    </td>
+                                    <td>@article.Category?.Name</td>
+                                    <td>
+                                        <span class="fw-semibold">$ @article.Price.ToString("N2")</span>
+                                        <span class="text-muted">/ @GetUnitText(article)</span>
+                                    </td>
+                                    <td>@FormatQuantity(article, article.Stock)</td>
+                                    <td>
+                                        <form asp-area="Employee" asp-controller="Cart" asp-action="Add" method="post" class="d-flex justify-content-end gap-2">
+                                            @Html.AntiForgeryToken()
+
+                                            <input type="hidden" name="articleId" value="@article.Id" />
+
+                                            <input type="text"
+                                                   name="quantityText"
+                                                   class="form-control form-control-sm quantity-result-input"
+                                                   value="@GetDefaultQuantity(article)"
+                                                   inputmode="decimal" />
+
+                                            <button type="submit" class="btn btn-sm btn-primary btn-modern-sm">
+                                                <i class="fa fa-cart-plus me-1"></i> Agregar
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    }
+
+    @if (!Model.Items.Any())
+    {
+        <div class="empty-state main-empty">
+            <div class="empty-illustration cart-empty">
+                <i class="fa fa-cart-shopping"></i>
+            </div>
+
+            <h2>El carrito está vacío</h2>
+            <p>
+                Escaneá un producto o usá la búsqueda para empezar a cargar la venta.
+            </p>
+
+            <div class="empty-actions">
+                <a href="#codeText" class="btn btn-primary btn-modern">
+                    <i class="fa fa-barcode me-2"></i> Escanear producto
+                </a>
+
+                <a href="#searchString" class="btn btn-soft-secondary">
+                    <i class="fa fa-magnifying-glass me-2"></i> Buscar producto
+                </a>
+            </div>
+        </div>
+    }
+    else
+    {
+        @if (Model.HasStockProblems)
+        {
+            <div class="alert custom-alert-danger">
+                <i class="fa fa-triangle-exclamation me-2"></i>
+                Hay productos en el carrito que superan el stock disponible. Ajustá las cantidades antes de confirmar la venta.
+            </div>
+        }
+
+        @if (!Model.HasStockProblems && Model.HasMinimumStockWarnings)
+        {
+            <div class="alert custom-alert-warning">
+                <i class="fa fa-circle-exclamation me-2"></i>
+                Al confirmar esta venta, uno o más productos quedarán en el margen de stock mínimo.
+            </div>
+        }
+
+        <div class="content-card mb-4">
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
+                <div>
+                    <span class="section-kicker">Detalle</span>
+                    <h2 class="section-title mb-0">Productos cargados</h2>
+                </div>
+
+                <span class="cart-count-pill">
+                    <i class="fa fa-box me-1"></i> @Model.Items.Count() productos
+                </span>
+            </div>
+
+            <div class="table-responsive custom-table-wrapper">
+                <table class="table align-middle mb-0 custom-table">
+                    <thead>
+                        <tr>
+                            <th>Producto</th>
+                            <th>Precio</th>
+                            <th>Cantidad</th>
+                            <th>Disponible</th>
+                            <th>Subtotal</th>
+                            <th class="text-end">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.Items)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center gap-3">
+                                        @if (item.IsManual)
+                                        {
+                                            <div class="cart-product-placeholder">
+                                                <i class="fa fa-tag"></i>
+                                            </div>
+                                        }
+                                        else if (!string.IsNullOrEmpty(item.Article.ImageUrl))
+                                        {
+                                            <img src="@item.Article.ImageUrl"
+                                                 alt="@item.Article.Name"
+                                                 class="cart-product-img" />
+                                        }
+                                        else
+                                        {
+                                            <div class="cart-product-placeholder">
+                                                <i class="fa fa-image"></i>
+                                            </div>
+                                        }
+
+                                        <div>
+                                            @if (item.IsManual)
+                                            {
+                                                <div class="fw-semibold">@(item.ManualName ?? "Producto suelto")</div>
+                                                <div class="small text-muted">Venta manual sin producto registrado</div>
+                                            }
+                                            else
+                                            {
+                                                <div class="fw-semibold">@item.Article.Name</div>
+                                                <div class="small text-muted">Código: @item.Article.Code</div>
+                                            }
+
+                                            @if (!item.IsManual && item.ExceedsStock)
+                                            {
+                                                <div class="small text-danger fw-semibold mt-1">
+                                                    La cantidad supera el stock disponible.
+                                                </div>
+                                            }
+                                            else if (!item.IsManual && item.ReachesMinimumStock)
+                                            {
+                                                <div class="small text-warning fw-semibold mt-1">
+                                                    Después de vender quedará: @FormatQuantity(item.Article, item.RemainingStock)
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                </td>
+
+                                <td>
+                                    @if (item.IsManual)
+                                    {
+                                        <span class="fw-semibold">$ @item.ManualUnitPrice.ToString("N2")</span>
+                                        <span class="text-muted">/ manual</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="fw-semibold">$ @item.Article.Price.ToString("N2")</span>
+                                        <span class="text-muted">/ @GetUnitText(item.Article)</span>
+                                    }
+                                </td>
+
+                                <td>
+                                    @if (item.IsManual)
+                                    {
+                                        <span class="text-muted">1 manual</span>
+                                    }
+                                    else
+                                    {
+                                        <div class="d-flex flex-wrap align-items-center gap-2">
+                                            <form asp-area="Employee" asp-controller="Cart" asp-action="Minus" method="post">
+                                                @Html.AntiForgeryToken()
+
+                                                <input type="hidden" name="articleId" value="@item.Article.Id" />
+
+                                                <button type="submit" class="btn btn-quantity" title="Restar">
+                                                    <i class="fa fa-minus"></i>
+                                                </button>
+                                            </form>
+
+                                            <form asp-area="Employee"
+                                                  asp-controller="Cart"
+                                                  asp-action="UpdateQuantity"
+                                                  method="post"
+                                                  class="d-flex align-items-center">
+                                                @Html.AntiForgeryToken()
+
+                                                <input type="hidden" name="articleId" value="@item.Article.Id" />
+
+                                                <div class="input-group input-group-sm quantity-editor">
+                                                    <input type="text"
+                                                           name="quantityText"
+                                                           class="form-control text-end"
+                                                           value="@GetQuantityInputValue(item.Article, item.Quantity)"
+                                                           inputmode="decimal"
+                                                           aria-label="Cantidad" />
+
+                                                    <span class="input-group-text">@GetQuantityUnit(item.Article)</span>
+
+                                                    <button type="submit" class="btn btn-outline-primary" title="Actualizar cantidad">
+                                                        <i class="fa fa-check"></i>
+                                                    </button>
+                                                </div>
+                                            </form>
+
+                                            <form asp-area="Employee" asp-controller="Cart" asp-action="Plus" method="post">
+                                                @Html.AntiForgeryToken()
+
+                                                <input type="hidden" name="articleId" value="@item.Article.Id" />
+
+                                                <button type="submit" class="btn btn-quantity" title="Sumar">
+                                                    <i class="fa fa-plus"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    }
+                                </td>
+
+                                <td>
+                                    @if (item.IsManual)
+                                    {
+                                        <span class="stock-text text-muted">No aplica</span>
+                                    }
+                                    else if (item.ExceedsStock)
+                                    {
+                                        <span class="stock-text text-danger">
+                                            @FormatQuantity(item.Article, item.RemainingStock)
+                                        </span>
+                                    }
+                                    else if (item.ReachesMinimumStock)
+                                    {
+                                        <span class="stock-text text-warning">
+                                            @FormatQuantity(item.Article, item.RemainingStock)
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="stock-text text-success">
+                                            @FormatQuantity(item.Article, item.RemainingStock)
+                                        </span>
+                                    }
+
+                                    @if (!item.IsManual)
+                                    {
+                                        <div class="small text-muted">
+                                            Stock real: @FormatQuantity(item.Article, item.Article.Stock)
+                                        </div>
+                                    }
+                                </td>
+
+                                <td>
+                                    <span class="line-total">$ @item.LineTotal.ToString("N2")</span>
+                                </td>
+
+                                <td class="text-end">
+                                    <form asp-area="Employee" asp-controller="Cart" asp-action="Remove" method="post">
+                                        @Html.AntiForgeryToken()
+
+                                        @if (item.IsManual)
+                                        {
+                                            <input type="hidden" name="lineId" value="@item.LineId" />
+                                        }
+                                        else
+                                        {
+                                            <input type="hidden" name="articleId" value="@item.Article.Id" />
+                                        }
+
+                                        <button type="submit" class="btn btn-remove" title="Quitar">
+                                            <i class="fa fa-trash"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="checkout-card">
+            <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+                <form asp-area="Employee" asp-controller="Cart" asp-action="Clear" method="post">
+                    @Html.AntiForgeryToken()
+
+                    <button type="submit" class="btn btn-soft-danger">
+                        <i class="fa fa-trash me-2"></i> Vaciar carrito
+                    </button>
+                </form>
+
+                <div class="total-panel total-panel-compact">
+                    <span class="total-label">TOTAL:</span>
+
+                    <span id="cartTotal"
+                          class="total-amount total-amount-compact"
+                          data-total="@Model.Total.ToString(System.Globalization.CultureInfo.InvariantCulture)">
+                        $ @Model.Total.ToString("N2")
+                    </span>
+                </div>
+            </div>
+
+            <form id="confirmSaleForm"
+                  asp-area="Employee"
+                  asp-controller="Cart"
+                  asp-action="ConfirmSale"
+                  method="post">
+                @Html.AntiForgeryToken()
+
+                <div class="row g-3 align-items-stretch">
+                    <div class="col-lg-6">
+                        <div class="checkout-option-card h-100">
+                            <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-start gap-3 mb-3">
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="checkout-icon">
+                                        <i class="fa fa-credit-card"></i>
+                                    </div>
+                                    <div>
+                                        <h3 class="checkout-title mb-0">Medio de pago</h3>
+                                        <p class="checkout-description mb-0">Seleccioná cómo se abona la venta.</p>
+                                    </div>
+                                </div>
+
+                                <div class="form-check form-switch payment-combined-switch">
+                                    <input class="form-check-input"
+                                           type="checkbox"
+                                           role="switch"
+                                           id="isCombinedPayment"
+                                           name="isCombinedPayment"
+                                           value="true" />
+                                    <label class="form-check-label fw-semibold" for="isCombinedPayment">
+                                        Medio de pago combinado
+                                    </label>
+                                </div>
+                            </div>
+
+                            <select id="paymentMethod" name="paymentMethod" class="form-select">
+                                <option value="Efectivo" selected>Efectivo</option>
+                                <option value="Transferencia">Transferencia</option>
+                                <option value="CuentaPersonal">Cuenta personal</option>
+                            </select>
+
+                            <div id="personalAccountPanel" class="mt-3 d-none">
+                                <label for="personalAccountSearch" class="form-label">Cuenta personal</label>
+                                <input type="hidden" id="personalAccountId" name="personalAccountId" />
+
+                                <div class="personal-account-search-box">
+                                    <div class="input-group input-group-modern">
+                                        <span class="input-group-text">
+                                            <i class="fa fa-user-magnifying-glass"></i>
+                                        </span>
+                                        <input type="search"
+                                               id="personalAccountSearch"
+                                               class="form-control"
+                                               autocomplete="off"
+                                               placeholder="Buscá por nombre, DNI, teléfono o dirección" />
+                                    </div>
+
+                                    <div id="personalAccountResults" class="personal-account-results d-none"></div>
+                                </div>
+                            </div>
+
+                            <div id="combinedPaymentPanel" class="mt-3 d-none">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label for="combinedTransferAmount" class="form-label">Transferencia</label>
+                                        <div class="input-group input-group-modern">
+                                            <span class="input-group-text">$</span>
+                                            <input type="text"
+                                                   id="combinedTransferAmount"
+                                                   name="combinedTransferAmountText"
+                                                   class="form-control"
+                                                   inputmode="decimal"
+                                                   autocomplete="off"
+                                                   placeholder="Monto transferido" />
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label for="combinedCashAmount" class="form-label">Efectivo</label>
+                                        <div class="input-group input-group-modern">
+                                            <span class="input-group-text">$</span>
+                                            <input type="text"
+                                                   id="combinedCashAmount"
+                                                   name="combinedCashAmountText"
+                                                   class="form-control"
+                                                   inputmode="decimal"
+                                                   autocomplete="off"
+                                                   placeholder="Monto en efectivo" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div id="combinedPaymentResult" class="change-result mt-2">
+                                    Restante en efectivo: $ 0,00
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-6">
+                        <div class="checkout-option-card h-100">
+                            <div class="d-flex align-items-center gap-2 mb-3">
+                                <div class="checkout-icon">
+                                    <i class="fa fa-money-bill-wave"></i>
+                                </div>
+                                <div>
+                                    <h3 class="checkout-title mb-0">Calculador de vuelto</h3>
+                                    <p class="checkout-description mb-0">Ingresá el monto recibido para calcular el vuelto.</p>
+                                </div>
+                            </div>
+
+                            <div id="cashPaymentPanel">
+                                <div class="input-group input-group-modern mb-2">
+                                    <span class="input-group-text">$</span>
+
+                                    <input type="text"
+                                           id="cashReceived"
+                                           name="amountReceivedText"
+                                           class="form-control"
+                                           inputmode="decimal"
+                                           autocomplete="off"
+                                           placeholder="Monto recibido" />
+                                </div>
+
+                                <div id="changeResult" class="change-result">
+                                    Vuelto: $ 0,00
+                                </div>
+                            </div>
+
+                            <div id="nonCashNotice" class="text-muted d-none">
+                                Este medio de pago no requiere calcular vuelto.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-end mt-4">
+                    <button type="submit"
+                            class="btn btn-success btn-confirm-sale"
+                            @(Model.HasStockProblems ? "disabled" : "")>
+                        <i class="fa fa-check-circle me-2"></i> Confirmar venta
+                    </button>
+                </div>
+            </form>
+        </div>
+    }
+</section>
+
+@if (TempData["saleSuccess"] != null)
+{
+    <div class="modal fade" id="saleSuccessModal" tabindex="-1" aria-labelledby="saleSuccessModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content sale-success-modal border-0 shadow-lg rounded-4">
+                <div class="modal-body text-center p-5">
+                    <div class="success-check-wrapper mx-auto mb-4">
+                        <i class="fa fa-check success-check-icon"></i>
+                    </div>
+
+                    <h4 id="saleSuccessModalLabel" class="fw-bold mb-2">
+                        Venta registrada correctamente
+                    </h4>
+
+                    <p class="text-muted mb-4">
+                        La venta se realizó y el stock fue actualizado.
+                    </p>
+
+                    <button type="button" class="btn btn-success px-4" data-bs-dismiss="modal">
+                        Aceptar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@section Scripts {
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const codeInput = document.getElementById("codeText");
+            const paymentMethod = document.getElementById("paymentMethod");
+            const cashPaymentPanel = document.getElementById("cashPaymentPanel");
+            const nonCashNotice = document.getElementById("nonCashNotice");
+            const personalAccountPanel = document.getElementById("personalAccountPanel");
+            const cashInput = document.getElementById("cashReceived");
+            const changeResult = document.getElementById("changeResult");
+            const totalElement = document.getElementById("cartTotal");
+            const isCombinedPayment = document.getElementById("isCombinedPayment");
+            const combinedPaymentPanel = document.getElementById("combinedPaymentPanel");
+            const combinedCashAmount = document.getElementById("combinedCashAmount");
+            const combinedTransferAmount = document.getElementById("combinedTransferAmount");
+            const combinedPaymentResult = document.getElementById("combinedPaymentResult");
+            const saleSuccessModalElement = document.getElementById("saleSuccessModal");
+            const personalAccountId = document.getElementById("personalAccountId");
+            const personalAccountSearch = document.getElementById("personalAccountSearch");
+            const personalAccountResults = document.getElementById("personalAccountResults");
+            let personalAccountSearchTimeout;
+
+            if (codeInput) {
+                codeInput.focus();
+            }
+
+            function updatePaymentMethodView() {
+                if (!paymentMethod || !cashPaymentPanel || !nonCashNotice || !personalAccountPanel) {
+                    return;
+                }
+
+                const selectedMethod = paymentMethod.value;
+                const combinedEnabled = isCombinedPayment?.checked === true;
+
+                paymentMethod.disabled = combinedEnabled;
+                combinedPaymentPanel?.classList.toggle("d-none", !combinedEnabled);
+                cashPaymentPanel.classList.toggle("d-none", combinedEnabled || selectedMethod !== "Efectivo");
+                nonCashNotice.classList.toggle("d-none", combinedEnabled || selectedMethod === "Efectivo");
+                personalAccountPanel.classList.toggle("d-none", combinedEnabled || selectedMethod !== "CuentaPersonal");
+
+                if (!combinedEnabled && selectedMethod === "CuentaPersonal" && personalAccountSearch) {
+                    personalAccountSearch.focus();
+                    searchPersonalAccounts(personalAccountSearch.value);
+                } else {
+                    hidePersonalAccountResults();
+                }
+
+                updateCombinedPaymentResult();
+            }
+
+            if (paymentMethod) {
+                paymentMethod.addEventListener("change", updatePaymentMethodView);
+                updatePaymentMethodView();
+            }
+
+            if (isCombinedPayment) {
+                isCombinedPayment.addEventListener("change", function () {
+                    if (isCombinedPayment.checked) {
+                        paymentMethod.value = "Efectivo";
+                        personalAccountId.value = "";
+                        if (personalAccountSearch) {
+                            personalAccountSearch.value = "";
+                        }
+                    }
+
+                    updatePaymentMethodView();
+                });
+            }
+
+            function parseDecimal(value) {
+                if (!value) {
+                    return NaN;
+                }
+
+                value = value.trim().replace(/\s/g, "").replace("$", "");
+
+                const hasComma = value.includes(",");
+                const hasDot = value.includes(".");
+
+                if (hasComma && hasDot) {
+                    const lastComma = value.lastIndexOf(",");
+                    const lastDot = value.lastIndexOf(".");
+
+                    value = lastComma > lastDot
+                        ? value.replace(/\./g, "").replace(",", ".")
+                        : value.replace(/,/g, "");
+                } else if (hasComma) {
+                    value = value.replace(",", ".");
+                } else if (hasDot) {
+                    const lastDot = value.lastIndexOf(".");
+                    const digitsAfterDot = value.length - lastDot - 1;
+
+                    if (digitsAfterDot === 3) {
+                        value = value.replace(/\./g, "");
+                    }
+                }
+
+                return Number(value);
+            }
+
+            function formatMoney(value) {
+                return value.toLocaleString("es-AR", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                });
+            }
+
+            if (cashInput && changeResult && totalElement) {
+                const total = Number(totalElement.dataset.total);
+
+                cashInput.addEventListener("input", function () {
+                    const cashReceived = parseDecimal(cashInput.value);
+
+                    if (Number.isNaN(cashReceived)) {
+                        changeResult.textContent = "Vuelto: $ 0,00";
+                        changeResult.classList.remove("text-danger", "text-success");
+                        changeResult.classList.add("text-muted");
+                        return;
+                    }
+
+                    const change = cashReceived - total;
+
+                    if (change < 0) {
+                        changeResult.textContent = "Faltan: $ " + formatMoney(Math.abs(change));
+                        changeResult.classList.remove("text-muted", "text-success");
+                        changeResult.classList.add("text-danger");
+                        return;
+                    }
+
+                    changeResult.textContent = "Vuelto: $ " + formatMoney(change);
+                    changeResult.classList.remove("text-muted", "text-danger");
+                    changeResult.classList.add("text-success");
+                });
+            }
+
+            if (saleSuccessModalElement) {
+                const saleSuccessModal = new bootstrap.Modal(saleSuccessModalElement);
+                saleSuccessModal.show();
+            }
+
+            function searchPersonalAccounts(term) {
+                if (!personalAccountResults) {
+                    return;
+                }
+
+                personalAccountResults.innerHTML = '<div class="personal-account-result-message">Buscando...</div>';
+                personalAccountResults.classList.remove("d-none");
+
+                const url = `/Employee/PersonalAccounts/Search?term=${encodeURIComponent(term || "")}&page=1`;
+
+                fetch(url, { headers: { "Accept": "application/json" } })
+                    .then(response => response.json())
+                    .then(data => renderPersonalAccountResults(data.results || []))
+                    .catch(() => {
+                        personalAccountResults.innerHTML = '<div class="personal-account-result-message text-danger">No se pudieron cargar las cuentas.</div>';
+                    });
+            }
+
+            function renderPersonalAccountResults(accounts) {
+                if (!personalAccountResults) {
+                    return;
+                }
+
+                if (!accounts.length) {
+                    personalAccountResults.innerHTML = '<div class="personal-account-result-message">Sin resultados</div>';
+                    personalAccountResults.classList.remove("d-none");
+                    return;
+                }
+
+                personalAccountResults.innerHTML = accounts
+                    .map(account => `
+                        <button type="button"
+                                class="personal-account-result"
+                                data-account-id="${account.id}"
+                                data-account-text="${escapeHtml(account.text)}">
+                            <i class="fa fa-user me-2"></i>
+                            <span>${escapeHtml(account.text)}</span>
+                        </button>
+                    `)
+                    .join("");
+
+                personalAccountResults.classList.remove("d-none");
+            }
+
+            function hidePersonalAccountResults() {
+                if (personalAccountResults) {
+                    personalAccountResults.classList.add("d-none");
+                }
+            }
+
+            function escapeHtml(value) {
+                return String(value || "")
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;")
+                    .replace(/'/g, "&#039;");
+            }
+
+            if (personalAccountSearch && personalAccountId && personalAccountResults) {
+                personalAccountSearch.addEventListener("input", function () {
+                    personalAccountId.value = "";
+                    window.clearTimeout(personalAccountSearchTimeout);
+                    personalAccountSearchTimeout = window.setTimeout(() => {
+                        searchPersonalAccounts(personalAccountSearch.value);
+                    }, 220);
+                });
+
+                personalAccountSearch.addEventListener("focus", function () {
+                    searchPersonalAccounts(personalAccountSearch.value);
+                });
+
+                personalAccountResults.addEventListener("click", function (event) {
+                    const option = event.target.closest(".personal-account-result");
+
+                    if (!option) {
+                        return;
+                    }
+
+                    personalAccountId.value = option.dataset.accountId || "";
+                    personalAccountSearch.value = option.dataset.accountText || "";
+                    hidePersonalAccountResults();
+                });
+
+                document.addEventListener("click", function (event) {
+                    if (!event.target.closest(".personal-account-search-box")) {
+                        hidePersonalAccountResults();
+                    }
+                });
+            }
+
+            function updateCombinedPaymentResult() {
+                if (!combinedPaymentResult || !combinedTransferAmount || !combinedCashAmount || !totalElement) {
+                    return;
+                }
+
+                const total = Number(totalElement.dataset.total);
+                const transferAmount = parseDecimal(combinedTransferAmount.value);
+                const cashReceived = parseDecimal(combinedCashAmount.value);
+                const safeTransfer = Number.isNaN(transferAmount) ? 0 : transferAmount;
+                const remainingCash = total - safeTransfer;
+
+                if (safeTransfer > total) {
+                    combinedPaymentResult.textContent = "La transferencia supera el total de la venta";
+                    combinedPaymentResult.classList.remove("text-muted", "text-success");
+                    combinedPaymentResult.classList.add("text-danger");
+                    return;
+                }
+
+                if (Number.isNaN(cashReceived)) {
+                    combinedPaymentResult.textContent = "Restante en efectivo: $ " + formatMoney(Math.max(remainingCash, 0));
+                    combinedPaymentResult.classList.remove("text-danger", "text-success");
+                    combinedPaymentResult.classList.add("text-muted");
+                    return;
+                }
+
+                const change = cashReceived - remainingCash;
+
+                if (change < 0) {
+                    combinedPaymentResult.textContent = "Faltan en efectivo: $ " + formatMoney(Math.abs(change));
+                    combinedPaymentResult.classList.remove("text-muted", "text-success");
+                    combinedPaymentResult.classList.add("text-danger");
+                    return;
+                }
+
+                combinedPaymentResult.textContent = "Vuelto: $ " + formatMoney(change);
+                combinedPaymentResult.classList.remove("text-muted", "text-danger");
+                combinedPaymentResult.classList.add("text-success");
+            }
+
+            [combinedCashAmount, combinedTransferAmount].forEach((input) => {
+                if (input) {
+                    input.addEventListener("input", updateCombinedPaymentResult);
+                }
+            });
+        });
+    </script>
+}

@@ -1,0 +1,69 @@
+@{
+    ViewData["Title"] = "Gastos y retiros";
+}
+
+<div class="admin-page py-4">
+    <div class="admin-hero admin-hero-toolbar mb-4">
+        <div>
+            <span class="admin-eyebrow">Movimientos</span>
+            <h1 class="admin-title h3 mb-1">Gastos y retiros</h1>
+            <p class="admin-subtitle mb-0">Registrá cada salida de dinero para mantener el saldo real del negocio.</p>
+        </div>
+        <a asp-action="Create" class="btn btn-primary btn-modern">
+            <i class="bi bi-dash-circle me-1"></i> Registrar salida
+        </a>
+    </div>
+
+    <div class="content-card mb-4">
+        <form id="expensePeriodForm" method="get" class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label">Desde</label>
+                <input id="expenseDateFrom"
+                       type="date"
+                       name="dateFrom"
+                       value="@(((DateTime)ViewBag.DateFrom).ToString("yyyy-MM-dd"))"
+                       class="form-control" />
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label">Hasta</label>
+                <input id="expenseDateTo"
+                       type="date"
+                       name="dateTo"
+                       value="@(((DateTime)ViewBag.DateTo).ToString("yyyy-MM-dd"))"
+                       class="form-control" />
+            </div>
+
+            <div class="col-md-4">
+                <button class="btn btn-outline-primary w-100">
+                    <i class="bi bi-funnel me-1"></i> Aplicar período
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <div class="content-card">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2 class="section-title mb-0">Movimientos registrados</h2>
+            <span id="expensesTotal" class="badge text-bg-danger fs-6">Total: $ 0,00</span>
+        </div>
+        <div class="table-responsive">
+            <table id="expensesTable" class="table custom-table align-middle mb-0 w-100">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Tipo</th>
+                        <th>Concepto</th>
+                        <th>Medio</th>
+                        <th class="text-end">Monto</th>
+                        <th class="text-end">Acciones</th>
+                    </tr>
+                </thead>
+            </table>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/expense.js" asp-append-version="true"></script>
+}

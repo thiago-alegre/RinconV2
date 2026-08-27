@@ -1,0 +1,186 @@
+@model Rincon.Models.ViewModels.BalanceVM
+@using Rincon.Utilities.Enums
+@{
+    ViewData["Title"] = "Balance";
+}
+
+<div class="admin-page py-4">
+    <div class="admin-hero admin-hero-toolbar mb-4">
+        <div>
+            <span class="admin-eyebrow">Resumen del negocio</span>
+            <h1 class="admin-title h3 mb-1">Balance</h1>
+            <p class="admin-subtitle mb-0">Dinero cobrado menos compras, gastos y retiros.</p>
+        </div>
+
+        <div class="admin-hero-actions">
+            <a asp-controller="Sales"
+               asp-action="Create"
+               class="btn btn-primary btn-modern">
+                <i class="bi bi-plus-circle me-1"></i> Registrar venta
+            </a>
+            <a asp-controller="Expenses"
+               asp-action="Create"
+               class="btn btn-outline-danger btn-modern">
+                <i class="bi bi-dash-circle me-1"></i> Registrar gasto
+            </a>
+        </div>
+    </div>
+
+    <div class="content-card mb-4">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label">Desde</label>
+                <input type="date"
+                       name="dateFrom"
+                       value="@Model.DateFrom.ToString("yyyy-MM-dd")"
+                       class="form-control" />
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label">Hasta</label>
+                <input type="date"
+                       name="dateTo"
+                       value="@Model.DateTo.ToString("yyyy-MM-dd")"
+                       class="form-control" />
+            </div>
+
+            <div class="col-md-4">
+                <button class="btn btn-outline-primary w-100">Actualizar balance</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-6 col-xl-3">
+            <div class="content-card balance-metric-card h-100">
+                <div class="text-muted small">SALDO DISPONIBLE</div>
+                <div class="balance-metric-value balance-metric-value-primary @(Model.AvailableBalance >= 0 ? "text-success" : "text-danger")"
+                     data-fit-text
+                     data-fit-text-max="40"
+                     data-fit-text-min="22">
+                    @Model.AvailableBalance.ToString("C")
+                </div>
+                <div class="balance-payment-breakdown">
+                    <div>
+                        <span>Efectivo</span>
+                        <strong class="@(Model.AvailableCash >= 0 ? "text-success" : "text-danger")">
+                            @Model.AvailableCash.ToString("C")
+                        </strong>
+                    </div>
+                    <div>
+                        <span>Transferencia</span>
+                        <strong class="@(Model.AvailableTransfer >= 0 ? "text-success" : "text-danger")">
+                            @Model.AvailableTransfer.ToString("C")
+                        </strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-xl-3">
+            <div class="content-card balance-metric-card h-100">
+                <div class="text-muted small">VENTAS COBRADAS</div>
+                <div class="balance-metric-value mt-2"
+                     data-fit-text
+                     data-fit-text-max="28"
+                     data-fit-text-min="18">
+                    @Model.CollectedSales.ToString("C")
+                </div>
+                <small>Más cobros de cuentas: @Model.PersonalAccountCollections.ToString("C")</small>
+            </div>
+        </div>
+
+        <div class="col-md-6 col-xl-3">
+            <div class="content-card balance-metric-card h-100">
+                <div class="text-muted small">PENDIENTE DE COBRO</div>
+                <div class="balance-metric-value mt-2 text-warning"
+                     data-fit-text
+                     data-fit-text-max="28"
+                     data-fit-text-min="18">
+                    @Model.OutstandingPersonalAccounts.ToString("C")
+                </div>
+                <small>Cuentas personales históricas abiertas</small>
+            </div>
+        </div>
+
+        <div class="col-md-6 col-xl-3">
+            <div class="content-card balance-metric-card h-100">
+                <div class="text-muted small">UTILIDAD ESTIMADA</div>
+                <div class="balance-metric-value mt-2"
+                     data-fit-text
+                     data-fit-text-max="28"
+                     data-fit-text-min="18">
+                    @Model.EstimatedProfit.ToString("C")
+                </div>
+                <small>Precio menos costo de productos vendidos</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="content-card border-start border-4 border-primary">
+                <span class="text-muted">Compras de mercadería</span>
+                <div class="h4 mt-2">@Model.MerchandisePurchases.ToString("C")</div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="content-card border-start border-4 border-primary">
+                <span class="text-muted">Gastos del negocio</span>
+                <div class="h4 mt-2">@Model.BusinessExpenses.ToString("C")</div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="content-card border-start border-4 border-primary">
+                <span class="text-muted">Retiros personales</span>
+                <div class="h4 mt-2">@Model.PersonalWithdrawals.ToString("C")</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="content-card">
+        <div class="d-flex justify-content-between align-items-center gap-3 mb-3">
+            <h2 class="section-title mb-0">Últimas salidas</h2>
+            <a asp-controller="Expenses"
+               asp-action="Index"
+               asp-route-dateFrom="@Model.DateFrom.ToString("yyyy-MM-dd")"
+               asp-route-dateTo="@Model.DateTo.ToString("yyyy-MM-dd")"
+               class="btn btn-primary btn-modern-sm">
+                <i class="bi bi-list-ul me-1"></i> Ver todas
+            </a>
+        </div>
+
+        @if (!Model.RecentExpenses.Any())
+        {
+            <p class="text-muted mb-0">Todavía no hay movimientos en el período.</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table mb-0">
+                    <tbody>
+                        @foreach (var item in Model.RecentExpenses)
+                        {
+                            var expenseType = item.Type switch
+                            {
+                                ExpenseType.CompraMercaderia => "Mercadería",
+                                ExpenseType.GastoNegocio => "Negocio",
+                                _ => "Retiro personal"
+                            };
+
+                            <tr>
+                                <td>@item.Date.ToString("dd/MM/yyyy")</td>
+                                <td>@item.Concept</td>
+                                <td>@expenseType</td>
+                                <td class="text-end text-danger fw-bold">
+                                    - @item.Amount.ToString("C")
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>

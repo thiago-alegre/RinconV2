@@ -1,0 +1,40 @@
+@{
+    ViewData["Title"] = "Cuentas personales";
+}
+
+<div class="admin-page py-4">
+    <div class="admin-hero admin-hero-toolbar mb-4">
+        <div>
+            <span class="admin-eyebrow">Clientes</span>
+            <h1 class="admin-title h3 mb-1">Cuentas personales</h1>
+            <p class="admin-subtitle mb-0">Administrá las personas que compran por cuenta.</p>
+        </div>
+
+        <a asp-action="Upsert" class="btn btn-primary btn-modern">
+            <i class="bi bi-plus-circle me-1"></i>
+            Crear cuenta
+        </a>
+    </div>
+
+    <div class="content-card">
+        <div class="table-responsive custom-table-wrapper">
+            <table id="accountsTable" class="table custom-table mb-0 w-100">
+                <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>DNI</th>
+                        <th>Teléfono</th>
+                        <th>Debe</th>
+                        <th>Desde</th>
+                        <th>Estado</th>
+                        <th class="text-end">Acciones</th>
+                    </tr>
+                </thead>
+            </table>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/account.js" asp-append-version="true"></script>
+}

@@ -1,0 +1,61 @@
+﻿@{
+    ViewData["Title"] = "Categorías";
+}
+
+<div class="admin-page py-4">
+    <div class="admin-hero mb-4 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+        <div class="d-flex align-items-center gap-3">
+            <div class="admin-hero-icon">
+                <i class="fa fa-folder-open"></i>
+            </div>
+            <div>
+                <span class="admin-eyebrow">Administración</span>
+                <div class="d-flex align-items-center gap-2">
+                    <h1 class="admin-title h3 mb-1">Categorías</h1>
+                    @await Html.PartialAsync("~/Views/Shared/_ScreenHelp.cshtml", new Rincon.Models.ViewModels.ScreenHelpVM
+                    {
+                        Title = "Cómo usar categorías",
+                        Description = "Las categorías sirven para ordenar los productos y facilitar búsquedas, reportes y estadísticas.",
+        Items = new[]
+        {
+            "Creá categorías claras como Bebidas, Cigarrillos o Almacén.",
+            "Usá Editar para corregir nombres o activar/desactivar una categoría.",
+            "Eliminar deja de mostrar la categoría si ya no se usa en el local."
+        }
+                    })
+                </div>
+                <p class="admin-subtitle mb-0">Organizá los grupos de productos del local.</p>
+            </div>
+        </div>
+
+        <a asp-area="Admin" asp-controller="Category" asp-action="Upsert" class="btn btn-primary btn-modern">
+            <i class="bi bi-plus-circle me-1"></i> Crear categoría
+        </a>
+    </div>
+
+    <div class="content-card">
+        <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mb-3">
+            <div>
+                <span class="section-kicker">Listado</span>
+                <h2 class="section-title mb-0">Lista de categorías</h2>
+            </div>
+        </div>
+
+        <div class="custom-table-wrapper">
+            <table id="tblCategories" class="table custom-table mb-0 w-100">
+                <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Fecha de creación</th>
+                        <th>Estado</th>
+                        <th></th>
+                    </tr>
+                </thead>
+            </table>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/category.js" asp-append-version="true"></script>
+}

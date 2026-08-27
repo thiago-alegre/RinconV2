@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>aspnet-RinconV2-9d5f0db8-6a3b-4f35-9e2f-8254fb8c6194</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="8.0.23" />
+	  <PackageReference Include="Microsoft.AspNetCore.Identity.UI" Version="8.0.23" />
+	  <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.23" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.23">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="8.0.23" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Rincon.DataAccess\Rincon.DataAccess.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Remove="Areas\Admin\Views\ArticleBatches\**;Areas\Admin\Views\Category\**;Areas\Admin\Views\Sales\**;Areas\Admin\Views\Statistics\**;Areas\Admin\Views\Stock\**" />
+    <Content Remove="Areas\Employee\Views\Cart\**;Areas\Employee\Views\CashRegister\**;Areas\Employee\Views\PersonalAccounts\**" />
+    <RazorGenerate Remove="Areas\Admin\Views\ArticleBatches\**;Areas\Admin\Views\Category\**;Areas\Admin\Views\Sales\**;Areas\Admin\Views\Statistics\**;Areas\Admin\Views\Stock\**" />
+    <RazorGenerate Remove="Areas\Employee\Views\Cart\**;Areas\Employee\Views\CashRegister\**;Areas\Employee\Views\PersonalAccounts\**" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="Areas\Employee\Controllers\CartController.cs;Areas\Employee\Controllers\CashRegisterController.cs;Areas\Employee\Controllers\PersonalAccountsController.cs" />
+    <Compile Remove="Areas\Admin\Controllers\ArticleBatchesController.cs;Areas\Admin\Controllers\CategoryController.cs;Areas\Admin\Controllers\SalesController.cs;Areas\Admin\Controllers\StatisticsController.cs;Areas\Admin\Controllers\StockController.cs" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,34 @@
+@using Rincon.Models
+@model ErrorViewModel
+
+@{
+    ViewData["Title"] = "Error";
+}
+
+<div class="admin-page py-4">
+    <div class="admin-hero mb-4 d-flex align-items-center gap-3">
+        <div class="admin-hero-icon">
+            <i class="bi bi-exclamation-triangle"></i>
+        </div>
+        <div>
+            <span class="admin-eyebrow">Sistema</span>
+            <h1 class="admin-title h3 mb-1">No se pudo completar la operación</h1>
+            <p class="admin-subtitle mb-0">Se produjo un error interno. Volvé a intentarlo o contactá al administrador.</p>
+        </div>
+    </div>
+
+    <div class="content-card">
+        <span class="section-kicker">Referencia</span>
+        <h2 class="section-title mb-2">Error registrado</h2>
+        <p class="text-muted mb-3">
+            Por seguridad no se muestran detalles técnicos en pantalla.
+        </p>
+
+        @if (Model.ShowRequestId)
+        {
+            <p class="mb-0">
+                Código de seguimiento: <code>@Model.RequestId</code>
+            </p>
+        }
+    </div>
+</div>

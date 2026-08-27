@@ -1,0 +1,198 @@
+@model Rincon.Models.DirectSale
+@using Rincon.Utilities.Enums
+
+@functions {
+    private static string FormatQuantity(decimal quantity)
+    {
+        return quantity % 1 == 0
+            ? quantity.ToString("N0")
+            : quantity.ToString("N2");
+    }
+
+    private static string GetPaymentMethodName(PaymentMethod method)
+    {
+        return method switch
+        {
+            PaymentMethod.Efectivo => "Efectivo",
+            PaymentMethod.Transferencia => "Transferencia",
+            PaymentMethod.CuentaPersonal => "Cuenta personal",
+            _ => "Sin especificar"
+        };
+    }
+}
+
+@{
+    ViewData["Title"] = $"Venta #{Model.Id}";
+    var profit = Model.Total - Model.TotalCost;
+    var seller = string.IsNullOrWhiteSpace(Model.User?.FullName)
+        ? Model.User?.Email ?? "Sin usuario"
+        : Model.User.FullName;
+}
+
+<div class="admin-page py-4">
+    <div class="admin-hero admin-hero-toolbar mb-4">
+        <div>
+            <span class="admin-eyebrow">Detalle de venta</span>
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <h1 class="admin-title h3 mb-0">Venta #@Model.Id</h1>
+                <span class="status-badge @(Model.IsVoided ? "status-inactive" : "status-active")">
+                    @(Model.IsVoided ? "Anulada" : "Vigente")
+                </span>
+            </div>
+            <p class="admin-subtitle mb-0 mt-1">Registrada el @Model.Date.ToString("dd/MM/yyyy 'a las' HH:mm").</p>
+        </div>
+
+        <div class="admin-hero-actions">
+            <a asp-action="Index" class="btn btn-soft-secondary btn-modern">
+                <i class="bi bi-arrow-left me-1"></i> Volver
+            </a>
+
+            @if (!Model.IsVoided)
+            {
+                <button type="button"
+                        class="btn btn-soft-danger btn-modern"
+                        data-bs-toggle="modal"
+                        data-bs-target="#voidDirectSaleModal">
+                    <i class="bi bi-x-circle me-1"></i> Anular venta
+                </button>
+            }
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-sm-6 col-xl-3">
+            <div class="detail-metric-card">
+                <div class="detail-metric-label">Total</div>
+                <div class="detail-metric-value success">@Model.Total.ToString("C")</div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="detail-metric-card">
+                <div class="detail-metric-label">Costo registrado</div>
+                <div class="detail-metric-value">@Model.TotalCost.ToString("C")</div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="detail-metric-card">
+                <div class="detail-metric-label">Utilidad estimada</div>
+                <div class="detail-metric-value">@profit.ToString("C")</div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="detail-metric-card">
+                <div class="detail-metric-label">Forma de pago</div>
+                <div class="detail-metric-value">@GetPaymentMethodName(Model.PaymentMethod)</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="content-card mb-4">
+        <div class="sale-detail-meta">
+            <div>
+                <span>Registró</span>
+                <strong>@seller</strong>
+            </div>
+            <div>
+                <span>Cuenta personal</span>
+                <strong>@(Model.PersonalAccount?.FullName ?? "No corresponde")</strong>
+            </div>
+            <div>
+                <span>Cantidad de productos</span>
+                <strong>@Model.Items.Sum(item => item.Quantity).ToString("N0")</strong>
+            </div>
+        </div>
+    </div>
+
+    <div class="content-card mb-4">
+        <div class="mb-3">
+            <span class="section-kicker">Productos</span>
+            <h2 class="section-title mb-0">Detalle de la operación</h2>
+        </div>
+
+        <div class="table-responsive custom-table-wrapper">
+            <table class="table custom-table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Producto</th>
+                        <th class="text-end">Cantidad</th>
+                        <th class="text-end">Precio unitario</th>
+                        <th class="text-end">Costo unitario</th>
+                        <th class="text-end">Subtotal</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in Model.Items.OrderBy(item => item.Id))
+                    {
+                        <tr>
+                            <td class="fw-semibold">@item.ProductName</td>
+                            <td class="text-end">@FormatQuantity(item.Quantity)</td>
+                            <td class="text-end">@item.UnitPrice.ToString("C")</td>
+                            <td class="text-end">@item.UnitCost.ToString("C")</td>
+                            <td class="text-end fw-bold">@item.Subtotal.ToString("C")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    @if (Model.IsVoided)
+    {
+        <div class="content-card sale-void-note">
+            <span class="section-kicker">Auditoría</span>
+            <h2 class="section-title">Venta anulada</h2>
+            <p class="mb-1"><strong>Fecha:</strong> @(Model.VoidedAt?.ToString("dd/MM/yyyy HH:mm") ?? "-")</p>
+            <p class="mb-1"><strong>Usuario:</strong> @(Model.VoidedByUser?.FullName ?? Model.VoidedByUser?.Email ?? "Sin usuario")</p>
+            <p class="mb-0"><strong>Motivo:</strong> @(string.IsNullOrWhiteSpace(Model.VoidReason) ? "Sin observaciones" : Model.VoidReason)</p>
+        </div>
+    }
+</div>
+
+@if (!Model.IsVoided)
+{
+    <div class="modal fade screen-help-modal"
+         id="voidDirectSaleModal"
+         tabindex="-1"
+         aria-labelledby="voidDirectSaleModalLabel"
+         aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content screen-help-content">
+                <div class="modal-header screen-help-header">
+                    <div>
+                        <span class="section-kicker">Confirmación</span>
+                        <h2 class="modal-title screen-help-title" id="voidDirectSaleModalLabel">
+                            Anular venta #@Model.Id
+                        </h2>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+
+                <form asp-action="Void" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@Model.Id" />
+
+                    <div class="modal-body screen-help-body">
+                        <p class="screen-help-description">
+                            La venta se conservará en el historial, pero dejará de sumar al balance, a la utilidad y a la deuda de la cuenta personal.
+                        </p>
+
+                        <label for="voidReason" class="form-label">Motivo</label>
+                        <textarea id="voidReason"
+                                  name="reason"
+                                  class="form-control"
+                                  rows="3"
+                                  maxlength="500"
+                                  placeholder="Ej.: venta registrada por error"></textarea>
+                    </div>
+
+                    <div class="modal-footer screen-help-footer">
+                        <button type="button" class="btn btn-soft-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-soft-danger">
+                            <i class="bi bi-x-circle me-1"></i> Sí, anular
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}

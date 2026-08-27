@@ -1,0 +1,283 @@
+@model Rincon.Models.ViewModels.DirectSaleCreateVM
+@using Rincon.Utilities.Enums
+
+@{
+    ViewData["Title"] = "Registrar venta";
+}
+
+<form method="post" class="sale-create-form">
+    <div class="admin-page py-4">
+        <div class="admin-hero mb-4">
+            <span class="admin-eyebrow">Ventas</span>
+            <h1 class="admin-title h3 mb-1">Registrar venta</h1>
+            <p class="admin-subtitle mb-0">
+                Agregá los productos y confirmá la operación directamente.
+            </p>
+        </div>
+
+        <div class="form-card sale-form-card">
+            <div class="sale-form-content">
+                <div asp-validation-summary="All" class="text-danger"></div>
+
+                <div class="sale-meta-grid">
+                    <div class="sale-field">
+                        <label asp-for="Date" class="form-label"></label>
+                        <input asp-for="Date"
+                               asp-format="{0:yyyy-MM-ddTHH:mm}"
+                               type="datetime-local"
+                               class="form-control" />
+                    </div>
+
+                    <div class="sale-field">
+                        <label asp-for="PaymentMethod" class="form-label"></label>
+                        <select asp-for="PaymentMethod" id="payment" class="form-select">
+                            <option value="1">Efectivo</option>
+                            <option value="2">Transferencia</option>
+                            <option value="3">Cuenta personal</option>
+                        </select>
+                    </div>
+
+                    <div class="sale-field" id="accountBox">
+                        <label asp-for="PersonalAccountId" class="form-label"></label>
+                        <select asp-for="PersonalAccountId" class="form-select">
+                            <option value="">Seleccione...</option>
+                            @foreach (var account in Model.Accounts)
+                            {
+                                <option value="@account.Id">@account.FullName</option>
+                            }
+                        </select>
+                        <span asp-validation-for="PersonalAccountId" class="text-danger"></span>
+                    </div>
+                </div>
+
+                <div class="sale-lines-header" aria-hidden="true">
+                    <span>Producto</span>
+                    <span>Cantidad</span>
+                    <span></span>
+                </div>
+
+                <div id="lines">
+                    @for (var index = 0; index < Model.Lines.Count; index++)
+                    {
+                        <div class="sale-line">
+                            <div class="sale-product-field">
+                                <select name="Lines[@index].ProductId" class="form-select product product-search" style="width: 100%;">
+                                    <option value="">Seleccione un producto...</option>
+                                    @foreach (var product in Model.Products)
+                                    {
+                                        <option value="@product.Id"
+                                                data-price="@product.SalePrice.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                                                selected="@(Model.Lines[index].ProductId == product.Id ? "selected" : null)">
+                                            @product.Name — @product.SalePrice.ToString("C")
+                                        </option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="sale-quantity-field">
+                                <input name="Lines[@index].Quantity"
+                                       value="@Model.Lines[index].Quantity"
+                                       type="number"
+                                       min="1"
+                                       step="1"
+                                       inputmode="numeric"
+                                       aria-label="Cantidad"
+                                       class="form-control quantity" />
+                            </div>
+
+                            <div class="sale-remove-action">
+                                <button type="button" class="btn btn-outline-danger remove sale-remove-button">
+                                    Quitar
+                                </button>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <button type="button" id="addLine" class="btn btn-outline-primary sale-add-button">
+                    <i class="bi bi-plus"></i> Agregar producto
+                </button>
+
+                <div class="sale-total-row">
+                    <strong>Total estimado</strong>
+                    <span id="total" class="h3">$ 0,00</span>
+                </div>
+
+                <div class="sale-form-actions">
+                    <a asp-controller="Balance"
+                       asp-action="Index"
+                       class="btn btn-soft-secondary sale-action-button">
+                        Cancelar
+                    </a>
+                    <button class="btn btn-primary sale-action-button">Confirmar venta</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        const linesContainer = document.getElementById("lines");
+        const addLineButton = document.getElementById("addLine");
+        const totalElement = document.getElementById("total");
+        const paymentSelect = document.getElementById("payment");
+        const accountBox = document.getElementById("accountBox");
+
+        function initializeProductSearch(container) {
+            $(container).find(".product-search").each(function () {
+                const productSelect = $(this);
+
+                if (productSelect.hasClass("select2-hidden-accessible")) {
+                    return;
+                }
+
+                productSelect.select2({
+                    theme: "bootstrap-5",
+                    width: "100%",
+                    placeholder: "Buscar un producto...",
+                    allowClear: true,
+                    minimumResultsForSearch: 0,
+                    language: {
+                        noResults: function () {
+                            return "No se encontraron productos";
+                        }
+                    }
+                });
+            });
+        }
+
+        function destroyProductSearch(row) {
+            const productSelect = $(row).find(".product-search");
+
+            if (productSelect.hasClass("select2-hidden-accessible")) {
+                productSelect.select2("destroy");
+            }
+        }
+
+        function renumberLines() {
+            const rows = linesContainer.querySelectorAll(".sale-line");
+
+            rows.forEach((row, index) => {
+                row.querySelector(".product").name =
+                    `Lines[${index}].ProductId`;
+
+                row.querySelector(".quantity").name =
+                    `Lines[${index}].Quantity`;
+            });
+        }
+
+        function calculateTotal() {
+            let total = 0;
+
+            linesContainer.querySelectorAll(".sale-line").forEach(row => {
+                const productSelect = row.querySelector(".product");
+                const quantityInput = row.querySelector(".quantity");
+
+                const selectedOption = productSelect.selectedOptions[0];
+                const price = Number(selectedOption?.dataset.price ?? 0);
+                const quantity = Number(quantityInput.value ?? 0);
+
+                total += price * quantity;
+            });
+
+            totalElement.textContent = total.toLocaleString("es-AR", {
+                style: "currency",
+                currency: "ARS"
+            });
+        }
+
+        function validateQuantity(quantityInput) {
+            const quantity = Number(quantityInput.value);
+            const isValid = Number.isInteger(quantity) && quantity >= 1;
+
+            quantityInput.setCustomValidity(
+                isValid ? "" : "La cantidad debe ser un número entero mayor a cero."
+            );
+
+            return isValid;
+        }
+
+        function addProductLine() {
+            const sourceRow =
+                linesContainer.querySelector(".sale-line");
+
+            /*
+             * Antes de clonar eliminamos Select2 de la fila original.
+             * Así evitamos copiar el HTML interno generado por la librería.
+             */
+            destroyProductSearch(sourceRow);
+
+            const newRow = sourceRow.cloneNode(true);
+
+            initializeProductSearch(sourceRow);
+
+            newRow.querySelector(".product").value = "";
+            newRow.querySelector(".quantity").value = "1";
+
+            linesContainer.appendChild(newRow);
+
+            renumberLines();
+            initializeProductSearch(newRow);
+            calculateTotal();
+        }
+
+        function removeProductLine(event) {
+            const removeButton = event.target.closest(".remove");
+
+            if (!removeButton) {
+                return;
+            }
+
+            const rows = linesContainer.querySelectorAll(".sale-line");
+
+            if (rows.length <= 1) {
+                return;
+            }
+
+            const row = removeButton.closest(".sale-line");
+
+            destroyProductSearch(row);
+            row.remove();
+
+            renumberLines();
+            calculateTotal();
+        }
+
+        function handleQuantityInput(event) {
+            if (!event.target.classList.contains("quantity")) {
+                return;
+            }
+
+            validateQuantity(event.target);
+            calculateTotal();
+        }
+
+        function updateAccountVisibility() {
+            accountBox.style.display =
+                paymentSelect.value === "3" ? "block" : "none";
+        }
+
+        addLineButton.addEventListener("click", addProductLine);
+        linesContainer.addEventListener("click", removeProductLine);
+        linesContainer.addEventListener("input", handleQuantityInput);
+
+        $(linesContainer).on(
+            "change",
+            ".product-search",
+            calculateTotal
+        );
+
+        paymentSelect.addEventListener(
+            "change",
+            updateAccountVisibility
+        );
+
+        initializeProductSearch(linesContainer);
+        linesContainer.querySelectorAll(".quantity").forEach(validateQuantity);
+        updateAccountVisibility();
+        calculateTotal();
+    </script>
+}

@@ -1,0 +1,270 @@
+@using Rincon.Utilities
+@using Microsoft.AspNetCore.Identity
+@using Rincon.Models
+@using Microsoft.AspNetCore.Antiforgery
+
+@inject UserManager<ApplicationUser> UserManager
+@inject IAntiforgery Antiforgery
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="request-verification-token" content="@Antiforgery.GetAndStoreTokens(Context).RequestToken" />
+    <title>@ViewData["Title"] - RinconV2</title>
+
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+
+    <!-- Íconos -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+
+    <!-- Librerías -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/2.0.0/css/dataTables.dataTables.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.13.2/themes/base/jquery-ui.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/2.1.4/toastr.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
+
+    <!-- Estilos propios: se cargan al final para mantener la paleta de la aplicación -->
+    <link rel="stylesheet" href="~/Rincon.styles.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/rincon-ui.css" asp-append-version="true" />
+
+    @RenderSection("Styles", required: false)
+</head>
+
+<body>
+    <header>
+        @if (!Context.Request.Path.StartsWithSegments("/Identity/Account/Login"))
+        {
+            var currentUser = User.Identity != null && User.Identity.IsAuthenticated
+            ? await UserManager.GetUserAsync(User)
+            : null;
+
+            var displayName = currentUser?.FullName ?? currentUser?.UserName ?? User.Identity?.Name ?? "Usuario";
+
+            <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom shadow-sm mb-4">
+                <div class="container-fluid px-4">
+
+                    <a class="navbar-brand fw-bold d-flex align-items-center gap-2"
+                       asp-area="Employee"
+                       asp-controller="Balance"
+                       asp-action="Index">
+                        <i class="bi bi-shop"></i>
+                        <span>RinconV2</span>
+                    </a>
+
+                    <button class="navbar-toggler"
+                            type="button"
+                            data-bs-toggle="collapse"
+                            data-bs-target="#mainNavbar"
+                            aria-controls="mainNavbar"
+                            aria-expanded="false"
+                            aria-label="Mostrar navegación">
+                        <span class="navbar-toggler-icon"></span>
+                    </button>
+
+                    <div class="collapse navbar-collapse" id="mainNavbar">
+
+                        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+
+                            @if (User.Identity != null && User.Identity.IsAuthenticated)
+                            {
+                                @if (User.IsInRole(SD.Role_Employee) || User.IsInRole(SD.Role_Admin))
+                                {
+                                   
+                                    <li class="nav-item">
+                                        <a class="nav-link"
+                                           asp-area="Employee"
+                                           asp-controller="Balance"
+                                           asp-action="Index">
+                                            <i class="bi bi-speedometer2 me-1"></i> Balance
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link"
+                                           asp-area="Employee"
+                                           asp-controller="Sales"
+                                           asp-action="Index">
+                                            <i class="bi bi-receipt me-1"></i> Ventas
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link"
+                                           asp-area="Employee"
+                                           asp-controller="Expenses"
+                                           asp-action="Index">
+                                            <i class="bi bi-wallet2 me-1"></i> Gastos y retiros
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link"
+                                           asp-area="Employee"
+                                           asp-controller="Accounts"
+                                           asp-action="Index">
+                                            <i class="bi bi-person-lines-fill me-1"></i> Cuentas personales
+                                        </a>
+                                    </li>
+                                }
+
+                                @if (User.IsInRole(SD.Role_Admin))
+                                {
+                                    <li class="nav-item dropdown">
+                                        <a class="nav-link dropdown-toggle"
+                                           href="#"
+                                           id="adminDropdown"
+                                           role="button"
+                                           data-bs-toggle="dropdown"
+                                           aria-expanded="false">
+                                            <i class="bi bi-sliders me-1"></i> Administración
+                                        </a>
+                                        <ul class="dropdown-menu" aria-labelledby="adminDropdown">
+                                            <li>
+                                                <a class="dropdown-item" asp-area="Admin" asp-controller="Articles" asp-action="Index">
+                                                    <i class="bi bi-box-seam me-2"></i> Productos
+                                                </a>
+                                            </li>
+                                            <li>
+                                                <a class="dropdown-item" asp-area="Admin" asp-controller="Users" asp-action="Index">
+                                                    <i class="bi bi-people me-2"></i> Usuarios
+                                                </a>
+                                            </li>
+                                        </ul>
+                                    </li>
+
+                                }
+                            }
+
+                        </ul>
+
+                        <ul class="navbar-nav ms-auto align-items-center">
+                            @if (User.Identity != null && User.Identity.IsAuthenticated)
+                            {
+                                <li class="nav-item me-3">
+                                    <span class="nav-link fw-semibold d-flex align-items-center gap-2">
+                                        @displayName
+                                        <i class="bi bi-person-circle fs-5"></i>
+                                    </span>
+                                </li>
+
+                                <li class="nav-item">
+                                    <form asp-area="Identity"
+                                          asp-page="/Account/Logout"
+                                          method="post"
+                                          class="d-inline">
+
+                                        <button id="logoutBtn"
+                                                type="submit"
+                                                class="btn btn-outline-danger btn-sm d-flex align-items-center gap-2">
+                                            <i class="bi bi-box-arrow-right"></i>
+                                            <span>Salir</span>
+                                        </button>
+                                    </form>
+                                </li>
+                            }
+                            else
+                            {
+                                <li class="nav-item">
+                                    <a class="btn btn-outline-primary btn-sm"
+                                       asp-area="Identity"
+                                       asp-page="/Account/Login">
+                                        <i class="bi bi-box-arrow-in-right me-1"></i>
+                                        Iniciar sesión
+                                    </a>
+                                </li>
+                            }
+                        </ul>
+
+                    </div>
+                </div>
+            </nav>
+        }
+    </header>
+
+    <div class="container">
+        <main role="main" class="pb-3">
+            @RenderBody()
+        </main>
+    </div>
+
+    <!-- Scripts base -->
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Librerías -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.13.2/jquery-ui.min.js"></script>
+    <script src="https://cdn.datatables.net/2.0.0/js/dataTables.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.serializeJSON/3.2.1/jquery.serializejson.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/2.1.4/toastr.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <!-- Scripts propios -->
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    <script src="~/js/dataTableDefaults.js" asp-append-version="true"></script>
+
+    @if (TempData["success"] != null)
+    {
+        <script>
+            toastr.success('@TempData["success"]');
+        </script>
+    }
+
+    @if (TempData["error"] != null)
+    {
+        <script>
+            toastr.error('@TempData["error"]');
+        </script>
+    }
+
+    @if (TempData["modalTitle"] != null)
+    {
+        <script>
+            document.addEventListener("DOMContentLoaded", function () {
+                rinconModal({
+                    title: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["modalTitle"]?.ToString())),
+                    text: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["modalText"]?.ToString() ?? "")),
+                    icon: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["modalIcon"]?.ToString() ?? "info")),
+                    confirmButtonText: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["modalConfirmText"]?.ToString() ?? "Entendido")),
+                    cancelButtonText: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["modalCancelText"]?.ToString() ?? "Cancelar")),
+                    confirmUrl: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(TempData["modalConfirmUrl"]?.ToString())),
+                    showCancelButton: @((TempData["modalShowCancel"]?.ToString() == "true").ToString().ToLowerInvariant())
+                });
+            });
+        </script>
+    }
+
+    <script>
+        document.addEventListener("click", function (ev) {
+            const btn = ev.target.closest("#logoutBtn");
+
+            if (!btn) {
+                return;
+            }
+
+            ev.preventDefault();
+
+            const form = btn.closest("form");
+
+            if (!form) {
+                return;
+            }
+
+            rinconConfirm({
+                title: "Cerrar sesión",
+                text: "¿Seguro que querés cerrar tu sesión actual?",
+                icon: "question",
+                confirmButtonText: "Sí, cerrar",
+                cancelButtonText: "Cancelar"
+            }).then(res => {
+                if (res.isConfirmed) {
+                    form.submit();
+                }
+            });
+        });
+    </script>
+
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>
+

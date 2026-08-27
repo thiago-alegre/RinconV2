@@ -1,0 +1,116 @@
+@page
+@model LoginModel
+
+@{
+    ViewData["Title"] = "Iniciar sesión";
+}
+
+<section class="auth-page">
+    <div class="auth-shell">
+        <div class="auth-visual">
+            <div class="auth-visual-content">
+                <span class="auth-kicker">
+                    <i class="fa fa-shield-halved"></i>
+                    Acceso RinconV2
+                </span>
+
+                <h1 class="auth-title display-6 mt-3 mb-3">TU NEGOCIO, EN ORDEN</h1>
+
+                <p class="auth-copy fs-5 mb-0">
+                    Administrá ventas, cuentas personales, gastos y balance desde un solo lugar.
+                </p>
+            </div>
+
+            <div>
+                <img src="~/imagenes/Logo-login.png" asp-append-version="true" alt="Logo de Rincon" class="auth-visual-image" />
+            </div>
+
+            <div class="auth-visual-footer d-flex flex-wrap gap-2">
+                <span class="auth-metric">
+                    <i class="fa fa-bag-shopping"></i>
+                    Ventas
+                </span>
+                <span class="auth-metric">
+                    <i class="fa fa-address-book"></i>
+                    Cuentas
+                </span>
+                <span class="auth-metric">
+                    <i class="fa fa-chart-pie"></i>
+                    Balance
+                </span>
+            </div>
+        </div>
+
+        <div class="auth-card">
+            <form id="account" method="post">
+                <div class="auth-card-header">
+                    <div class="auth-icon mb-3">
+                        <i class="fa fa-user-lock"></i>
+                    </div>
+
+                    <span class="section-kicker">Autenticación</span>
+                    <h2 class="section-title mb-1">Iniciar sesión</h2>
+                    <p class="auth-subtitle mb-0">Ingresá tus credenciales para continuar.</p>
+                </div>
+
+                <div asp-validation-summary="ModelOnly" class="custom-alert-danger mb-3" role="alert"></div>
+
+                <div class="form-floating auth-field mb-3">
+                    <input asp-for="Input.Email"
+                           class="form-control"
+                           autocomplete="username"
+                           aria-required="true"
+                           placeholder="usuario@email.com" />
+                    <label asp-for="Input.Email">Email</label>
+                    <span asp-validation-for="Input.Email" class="text-danger small"></span>
+                </div>
+
+                <div class="form-floating auth-field mb-3">
+                    <input asp-for="Input.Password"
+                           class="form-control"
+                           autocomplete="current-password"
+                           aria-required="true"
+                           placeholder="Contraseña" />
+                    <label asp-for="Input.Password">Contraseña</label>
+                    <span asp-validation-for="Input.Password" class="text-danger small"></span>
+                </div>
+
+                <div class="form-check mb-4">
+                    <input class="form-check-input" asp-for="Input.RememberMe" />
+                    <label asp-for="Input.RememberMe" class="form-check-label">
+                        @Html.DisplayNameFor(m => m.Input.RememberMe)
+                    </label>
+                </div>
+
+                <div class="auth-actions">
+                    <button id="login-submit" type="submit" class="btn btn-primary btn-modern w-100">
+                        <i class="fa fa-right-to-bracket me-2"></i>
+                        Entrar
+                    </button>
+
+                    <button id="forgot-password"
+                            type="button"
+                            class="auth-link text-center border-0 bg-transparent p-0">
+                        Olvidé mi contraseña
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</section>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        document.getElementById("forgot-password")?.addEventListener("click", function () {
+            rinconModal({
+                title: "Restablecer contraseña",
+                text: "Por seguridad, el restablecimiento de contraseña lo realiza un administrador. " +
+                    "Comunicate con tu superior para que ingrese al sistema y te asigne una nueva " +
+                    "contraseña desde la sección Usuarios.",
+                icon: "info",
+                confirmButtonText: "Entendido"
+            });
+        });
+    </script>
+}
