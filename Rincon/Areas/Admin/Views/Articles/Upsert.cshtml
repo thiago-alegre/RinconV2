@@ -5,8 +5,9 @@
     ViewData["Title"] = isNewProduct ? "Crear producto" : "Editar producto";
 }
 
-<form method="post" enctype="multipart/form-data" class="product-upsert-form">
+<form method="post" enctype="multipart/form-data" class="product-upsert-form" novalidate>
     <input asp-for="Id" type="hidden" />
+    <input asp-for="Version" type="hidden" />
 
     <div class="admin-page py-4">
         <div class="admin-hero mb-4">

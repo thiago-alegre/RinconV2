@@ -243,11 +243,15 @@ namespace Rincon.DataAccess.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<decimal>("CashAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<DateTime>("Date")
                         .HasColumnType("timestamp without time zone");
 
-                    b.Property<bool>("IsVoided")
-                        .HasColumnType("boolean");
+                    b.Property<Guid?>("OperationId")
+                        .HasColumnType("uuid");
 
                     b.Property<int>("PaymentMethod")
                         .HasColumnType("integer");
@@ -263,26 +267,21 @@ namespace Rincon.DataAccess.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<decimal>("TransferAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<string>("UserId")
-                        .HasColumnType("text");
-
-                    b.Property<string>("VoidReason")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<DateTime?>("VoidedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<string>("VoidedByUserId")
                         .HasColumnType("text");
 
                     b.HasKey("Id");
 
+                    b.HasIndex("OperationId")
+                        .IsUnique();
+
                     b.HasIndex("PersonalAccountId");
 
                     b.HasIndex("UserId");
-
-                    b.HasIndex("VoidedByUserId");
 
                     b.ToTable("DirectSales");
                 });
@@ -330,6 +329,104 @@ namespace Rincon.DataAccess.Migrations
                     b.ToTable("DirectSaleItems");
                 });
 
+            modelBuilder.Entity("Rincon.Models.DirectSaleReturn", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("DirectSaleId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("OperationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("RefundMethod")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("Total")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalCost")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("UserId")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DirectSaleId");
+
+                    b.HasIndex("OperationId")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("DirectSaleReturns");
+                });
+
+            modelBuilder.Entity("Rincon.Models.DirectSaleReturnItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("DirectSaleItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("DirectSaleReturnId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ProductName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<bool>("ReturnsToStock")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal>("Subtotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("UnitCost")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DirectSaleItemId");
+
+                    b.HasIndex("DirectSaleReturnId");
+
+                    b.HasIndex("ProductId");
+
+                    b.ToTable("DirectSaleReturnItems");
+                });
+
             modelBuilder.Entity("Rincon.Models.Expense", b =>
                 {
                     b.Property<int>("Id")
@@ -357,6 +454,9 @@ namespace Rincon.DataAccess.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<Guid?>("OperationId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("PaymentMethod")
                         .HasColumnType("integer");
 
@@ -366,10 +466,19 @@ namespace Rincon.DataAccess.Migrations
                     b.Property<string>("UserId")
                         .HasColumnType("text");
 
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.Property<DateTime?>("VoidedAt")
                         .HasColumnType("timestamp without time zone");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("OperationId")
+                        .IsUnique();
 
                     b.HasIndex("UserId");
 
@@ -397,6 +506,10 @@ namespace Rincon.DataAccess.Migrations
                     b.Property<string>("FullName")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<decimal>("OpeningBalance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("Phone")
                         .HasColumnType("text");
@@ -428,6 +541,9 @@ namespace Rincon.DataAccess.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<Guid?>("OperationId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("PaymentMethod")
                         .HasColumnType("integer");
 
@@ -438,6 +554,9 @@ namespace Rincon.DataAccess.Migrations
                         .HasColumnType("text");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("OperationId")
+                        .IsUnique();
 
                     b.HasIndex("PersonalAccountId");
 
@@ -482,6 +601,12 @@ namespace Rincon.DataAccess.Migrations
                     b.Property<decimal>("SalePrice")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
 
                     b.HasKey("Id");
 
@@ -549,15 +674,9 @@ namespace Rincon.DataAccess.Migrations
                         .WithMany()
                         .HasForeignKey("UserId");
 
-                    b.HasOne("Rincon.Models.ApplicationUser", "VoidedByUser")
-                        .WithMany()
-                        .HasForeignKey("VoidedByUserId");
-
                     b.Navigation("PersonalAccount");
 
                     b.Navigation("User");
-
-                    b.Navigation("VoidedByUser");
                 });
 
             modelBuilder.Entity("Rincon.Models.DirectSaleItem", b =>
@@ -575,6 +694,50 @@ namespace Rincon.DataAccess.Migrations
                         .IsRequired();
 
                     b.Navigation("DirectSale");
+
+                    b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("Rincon.Models.DirectSaleReturn", b =>
+                {
+                    b.HasOne("Rincon.Models.DirectSale", "DirectSale")
+                        .WithMany("Returns")
+                        .HasForeignKey("DirectSaleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Rincon.Models.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId");
+
+                    b.Navigation("DirectSale");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Rincon.Models.DirectSaleReturnItem", b =>
+                {
+                    b.HasOne("Rincon.Models.DirectSaleItem", "DirectSaleItem")
+                        .WithMany("ReturnItems")
+                        .HasForeignKey("DirectSaleItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Rincon.Models.DirectSaleReturn", "DirectSaleReturn")
+                        .WithMany("Items")
+                        .HasForeignKey("DirectSaleReturnId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Rincon.Models.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DirectSaleItem");
+
+                    b.Navigation("DirectSaleReturn");
 
                     b.Navigation("Product");
                 });
@@ -606,6 +769,18 @@ namespace Rincon.DataAccess.Migrations
                 });
 
             modelBuilder.Entity("Rincon.Models.DirectSale", b =>
+                {
+                    b.Navigation("Items");
+
+                    b.Navigation("Returns");
+                });
+
+            modelBuilder.Entity("Rincon.Models.DirectSaleItem", b =>
+                {
+                    b.Navigation("ReturnItems");
+                });
+
+            modelBuilder.Entity("Rincon.Models.DirectSaleReturn", b =>
                 {
                     b.Navigation("Items");
                 });

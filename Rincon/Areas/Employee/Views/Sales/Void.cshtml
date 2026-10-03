@@ -1,0 +1,182 @@
+@model Rincon.Models.ViewModels.DirectSaleVoidVM
+@using Rincon.Utilities.Enums
+
+@{
+    ViewData["Title"] = $"Anular venta #{Model.SaleId}";
+}
+
+<form asp-action="Void" method="post" id="voidSaleForm">
+    @Html.AntiForgeryToken()
+    <input asp-for="SaleId" type="hidden" />
+    <input asp-for="OperationId" type="hidden" />
+
+    <div class="admin-page py-4">
+        <div class="admin-hero admin-hero-toolbar mb-4">
+            <div>
+                <span class="admin-eyebrow">Anulación de venta</span>
+                <h1 class="admin-title h3 mb-1">Anular productos de la venta #@Model.SaleId</h1>
+                <p class="admin-subtitle mb-0">Elegí los productos y cantidades que dejarán de formar parte de la venta.</p>
+            </div>
+            <a asp-action="Detail" asp-route-id="@Model.SaleId" class="btn btn-soft-secondary">Cancelar</a>
+        </div>
+
+        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+        <div class="content-card mb-4">
+            <div class="row g-3 mb-4">
+                <div class="col-md-4">
+                    <label asp-for="Date" class="form-label">Fecha de anulación</label>
+                    <input asp-for="Date" asp-format="{0:yyyy-MM-ddTHH:mm}" type="datetime-local" class="form-control" />
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="RefundMethod" class="form-label">Medio del reintegro</label>
+                    <input asp-for="RefundMethod" type="hidden" />
+                    @if (Model.IsAccountSale)
+                    {
+                        <p class="form-control-plaintext mb-0">Se descuenta de la cuenta personal, sin generar saldo a favor.</p>
+                    }
+                    else if (Model.RefundMethod == PaymentMethod.Transferencia)
+                    {
+                        <p class="form-control-plaintext mb-0">Se descuenta del saldo de transferencias.</p>
+                    }
+                    else if (Model.RefundMethod == PaymentMethod.Combinado)
+                    {
+                        <p class="form-control-plaintext mb-0">Se descuenta de efectivo y transferencia según el pago original.</p>
+                    }
+                    else
+                    {
+                        <p class="form-control-plaintext mb-0">Se descuenta del saldo en efectivo.</p>
+                    }
+                </div>
+                <div class="col-md-4">
+                    <label asp-for="Reason" class="form-label">Motivo</label>
+                    <input asp-for="Reason" class="form-control" maxlength="500" placeholder="Ej.: cambio de talle o carga incorrecta" />
+                    <span asp-validation-for="Reason" class="text-danger"></span>
+                </div>
+            </div>
+
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" id="selectAllVoidLines" />
+                <label class="form-check-label fw-semibold" for="selectAllVoidLines">Seleccionar todo para anular la venta completa</label>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table custom-table align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Anular</th>
+                            <th>Producto</th>
+                            <th>Vendido</th>
+                            <th>Ya anulado</th>
+                            <th>Disponible</th>
+                            <th style="width:140px">Cantidad</th>
+                            <th>Devuelve al stock</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @for (var index = 0; index < Model.Lines.Count; index++)
+                    {
+                        var available = Model.Lines[index].AvailableQuantity;
+                        var availableValue = available.ToString("0.################", System.Globalization.CultureInfo.InvariantCulture);
+                        <tr class="void-line" data-available="@availableValue">
+                            <td>
+                                <input asp-for="Lines[index].Selected" class="form-check-input void-line-selector" disabled="@(available <= 0)" />
+                            </td>
+                            <td class="fw-semibold">
+                                @Model.Lines[index].ProductName
+                                <input asp-for="Lines[index].DirectSaleItemId" type="hidden" />
+                            </td>
+                            <td>@Model.Lines[index].SoldQuantity.ToString("N0")</td>
+                            <td>@Model.Lines[index].ReturnedQuantity.ToString("N0")</td>
+                            <td>@available.ToString("N0")</td>
+                            <td>
+                                <input asp-for="Lines[index].Quantity"
+                                       asp-format="{0:0}"
+                                       type="number" min="0" max="@availableValue" step="1"
+                                       class="form-control void-line-quantity" disabled="@(!Model.Lines[index].Selected || available <= 0)" />
+                            </td>
+                            <td>
+                                <div class="form-check">
+                                    <input asp-for="Lines[index].ReturnsToStock"
+                                           class="form-check-input void-line-restock" disabled="@(!Model.Lines[index].Selected || available <= 0)" />
+                                    <label asp-for="Lines[index].ReturnsToStock" class="form-check-label">Sí</label>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-end gap-2">
+            <a asp-action="Detail" asp-route-id="@Model.SaleId" class="btn btn-soft-secondary">Cancelar</a>
+            <button class="btn btn-soft-danger" type="submit">
+                <i class="bi bi-x-circle me-1"></i> Confirmar anulación
+            </button>
+        </div>
+    </div>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (() => {
+            const rows = [...document.querySelectorAll('.void-line')];
+            const selectAll = document.getElementById('selectAllVoidLines');
+
+            const updateRow = row => {
+                const selected = row.querySelector('.void-line-selector');
+                const quantity = row.querySelector('.void-line-quantity');
+                const restock = row.querySelector('.void-line-restock');
+                const enabled = selected && !selected.disabled && selected.checked;
+                quantity.disabled = !enabled;
+                restock.disabled = !enabled;
+                if (!enabled) quantity.value = 0;
+                if (enabled && Number(quantity.value) <= 0) quantity.value = '1';
+            };
+
+            const updateSelectAll = () => {
+                const selectable = rows.map(row => row.querySelector('.void-line-selector')).filter(item => !item.disabled);
+                selectAll.checked = selectable.length > 0 && selectable.every(item => item.checked);
+                selectAll.indeterminate = selectable.some(item => item.checked) && !selectAll.checked;
+            };
+
+            rows.forEach(row => {
+                row.querySelector('.void-line-selector')?.addEventListener('change', () => {
+                    updateRow(row);
+                    updateSelectAll();
+                });
+            });
+
+            selectAll.addEventListener('change', () => {
+                rows.forEach(row => {
+                    const selected = row.querySelector('.void-line-selector');
+                    if (!selected.disabled) {
+                        selected.checked = selectAll.checked;
+                        if (selectAll.checked) {
+                            const available = Number(row.dataset.available);
+                            row.querySelector('.void-line-quantity').value = Number.isFinite(available)
+                                ? available.toString()
+                                : '1';
+                        }
+                        updateRow(row);
+                    }
+                });
+            });
+
+            document.getElementById('voidSaleForm').addEventListener('submit', () => {
+                rows.forEach(row => {
+                    const selected = row.querySelector('.void-line-selector');
+                    if (selected.checked) {
+                        row.querySelector('.void-line-quantity').disabled = false;
+                        row.querySelector('.void-line-restock').disabled = false;
+                    }
+                });
+            });
+
+            rows.forEach(updateRow);
+            updateSelectAll();
+        })();
+    </script>
+}

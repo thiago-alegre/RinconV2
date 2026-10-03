@@ -29,8 +29,6 @@ public class LogoutModel : PageModel
         await HttpContext.SignOutAsync(IdentityConstants.ApplicationScheme);
         await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
         await HttpContext.SignOutAsync(IdentityConstants.TwoFactorUserIdScheme);
-        HttpContext.Session.Clear();
-
         _logger.LogInformation("User logged out.");
 
         return RedirectToPage("/Account/Login", new { area = "Identity" });

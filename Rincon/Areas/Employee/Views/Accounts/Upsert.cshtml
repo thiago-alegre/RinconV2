@@ -43,6 +43,25 @@
                         <input asp-for="Address" class="form-control" />
                     </div>
 
+                    @if (Model.Id == 0)
+                    {
+                        <div class="col-12">
+                            <label asp-for="OpeningBalance" class="form-label"></label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input asp-for="OpeningBalance"
+                                       class="form-control"
+                                       inputmode="decimal"
+                                       autocomplete="off"
+                                       placeholder="0,00" />
+                            </div>
+                            <div class="form-text">
+                                Usalo para cargar una deuda que ya existía antes de comenzar a utilizar el sistema. No genera productos, stock ni utilidad.
+                            </div>
+                            <span asp-validation-for="OpeningBalance" class="text-danger"></span>
+                        </div>
+                    }
+
                     <div class="col-12 form-check form-switch">
                         <input asp-for="isActive" class="form-check-input" />
                         <label asp-for="isActive" class="form-check-label">Cuenta activa</label>

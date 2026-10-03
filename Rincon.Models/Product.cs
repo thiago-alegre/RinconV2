@@ -6,7 +6,8 @@ namespace Rincon.Models;
 public class Product
 {
     public int Id { get; set; }
-
+    [Timestamp]
+    public uint Version { get; set; }
     [Required(ErrorMessage = "Ingrese el nombre del producto")]
     [StringLength(120, ErrorMessage = "El nombre no puede superar los 120 caracteres")]
     [Display(Name = "Nombre")]

@@ -81,9 +81,13 @@
             {
                 <div class="custom-alert-info mt-4 mb-0">
                     <i class="fa fa-circle-info me-1"></i>
-                    La contraseña inicial será el DNI seguido de <strong>Aa!</strong>.
-                    Ejemplo: <strong>12345678Aa!</strong>
-                    El DNI debe cargarse solo con números, sin puntos ni guiones.
+                    Elegí una contraseña inicial y compartila con el usuario por un canal privado.
+                    <label asp-for="NewPassword" class="form-label">Contraseña inicial</label>
+                    <input asp-for="NewPassword" class="form-control" autocomplete="new-password" />
+                    <span asp-validation-for="NewPassword" class="text-danger"></span>
+                    <label asp-for="ConfirmPassword" class="form-label"></label>
+                    <input asp-for="ConfirmPassword" class="form-control" autocomplete="new-password" />
+                    <span asp-validation-for="ConfirmPassword" class="text-danger"></span>
                 </div>
             }
             else

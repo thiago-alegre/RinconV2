@@ -25,7 +25,7 @@ public class ExpensesController : Controller
 
     public IActionResult Index(DateTime? dateFrom, DateTime? dateTo)
     {
-        var (from, to) = NormalizeDateRange(dateFrom, dateTo);
+        var (from, to) = BusinessInput.NormalizeDateRange(dateFrom, dateTo);
         ViewBag.DateFrom = from;
         ViewBag.DateTo = to;
 
@@ -36,8 +36,8 @@ public class ExpensesController : Controller
     public async Task<IActionResult> GetAll(DateTime? dateFrom, DateTime? dateTo)
     {
         var request = DataTableRequest.From(Request);
-        var (from, to) = NormalizeDateRange(dateFrom, dateTo);
-        var endExclusive = to.AddDays(1);
+        var (from, to) = BusinessInput.NormalizeDateRange(dateFrom, dateTo);
+        var endExclusive = BusinessInput.ExclusiveEnd(to);
 
         var query = _db.Expenses
             .AsNoTracking()
@@ -121,7 +121,7 @@ public class ExpensesController : Controller
             type = GetExpenseTypeName(expense.Type),
             expense.Concept,
             expense.Notes,
-            paymentMethod = GetPaymentMethodName(expense.PaymentMethod),
+            paymentMethod = DisplayFormatting.PaymentMethodName(expense.PaymentMethod),
             expense.Amount
         });
 
@@ -136,13 +136,17 @@ public class ExpensesController : Controller
     }
 
     [HttpGet]
-    public IActionResult Create() => View(new Expense { Date = DateTime.Now });
+    public IActionResult Create() => View(new Expense { Date = DateTime.Now, OperationId = Guid.NewGuid() });
 
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(
-        [Bind("Date,Type,Concept,Amount,PaymentMethod,Notes")] Expense expense)
+        [Bind("OperationId,Date,Type,Concept,Amount,PaymentMethod,Notes")] Expense expense)
     {
+        if (expense.OperationId is null || expense.OperationId == Guid.Empty) return BadRequest();
+        var previous = await _db.Expenses.AsNoTracking().FirstOrDefaultAsync(e => e.OperationId == expense.OperationId);
+        if (previous is not null)
+            return previous.UserId == _userManager.GetUserId(User) ? RedirectToAction(nameof(Index)) : Conflict();
         ValidatePaymentMethod(expense);
 
         if (!ModelState.IsValid)
@@ -174,7 +178,7 @@ public class ExpensesController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Edit(
         int id,
-        [Bind("Id,Date,Type,Concept,Amount,PaymentMethod,Notes")] Expense input)
+        [Bind("Id,Version,Date,Type,Concept,Amount,PaymentMethod,Notes")] Expense input)
     {
         if (id != input.Id)
         {
@@ -196,6 +200,7 @@ public class ExpensesController : Controller
             return NotFound();
         }
 
+        _db.Entry(expense).Property(e => e.Version).OriginalValue = input.Version;
         expense.Date = input.Date;
         expense.Type = input.Type;
         expense.Concept = input.Concept.Trim();
@@ -233,16 +238,6 @@ public class ExpensesController : Controller
         });
     }
 
-    private static (DateTime From, DateTime To) NormalizeDateRange(
-        DateTime? dateFrom,
-        DateTime? dateTo)
-    {
-        var from = (dateFrom ?? DateTime.Today.AddMonths(-1)).Date;
-        var to = (dateTo ?? DateTime.Today).Date;
-
-        return to < from ? (to, from) : (from, to);
-    }
-
     private static string GetExpenseTypeName(ExpenseType type)
     {
         return type switch
@@ -254,19 +249,12 @@ public class ExpensesController : Controller
         };
     }
 
-    private static string GetPaymentMethodName(PaymentMethod paymentMethod)
-    {
-        return paymentMethod switch
-        {
-            PaymentMethod.Efectivo => "Efectivo",
-            PaymentMethod.Transferencia => "Transferencia",
-            _ => "Sin especificar"
-        };
-    }
-
     private void ValidatePaymentMethod(Expense expense)
     {
-        if (expense.PaymentMethod is PaymentMethod.CuentaPersonal or PaymentMethod.Combinado)
+        BusinessInput.Date(ModelState, expense.Date);
+        BusinessInput.Money(ModelState, nameof(expense.Amount), expense.Amount, true);
+        if (!Enum.IsDefined(expense.Type)) ModelState.AddModelError(nameof(expense.Type), "Seleccione un tipo válido.");
+        if (expense.PaymentMethod is not PaymentMethod.Efectivo and not PaymentMethod.Transferencia)
         {
             ModelState.AddModelError(
                 nameof(expense.PaymentMethod),

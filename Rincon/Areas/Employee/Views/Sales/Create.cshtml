@@ -3,9 +3,14 @@
 
 @{
     ViewData["Title"] = "Registrar venta";
+    var combinedPaymentError = ViewData.ModelState["CombinedPayment"]?
+        .Errors
+        .FirstOrDefault()?
+        .ErrorMessage;
 }
 
 <form method="post" class="sale-create-form">
+    <input type="hidden" asp-for="OperationId" />
     <div class="admin-page py-4">
         <div class="admin-hero mb-4">
             <span class="admin-eyebrow">Ventas</span>
@@ -17,7 +22,7 @@
 
         <div class="form-card sale-form-card">
             <div class="sale-form-content">
-                <div asp-validation-summary="All" class="text-danger"></div>
+                <div asp-validation-summary="ModelOnly" class="text-danger"></div>
 
                 <div class="sale-meta-grid">
                     <div class="sale-field">
@@ -28,25 +33,63 @@
                                class="form-control" />
                     </div>
 
-                    <div class="sale-field">
+                    <div class="sale-field sale-payment-method-field">
                         <label asp-for="PaymentMethod" class="form-label"></label>
                         <select asp-for="PaymentMethod" id="payment" class="form-select">
-                            <option value="1">Efectivo</option>
-                            <option value="2">Transferencia</option>
-                            <option value="3">Cuenta personal</option>
+                            <option value="@((int)PaymentMethod.Efectivo)">Efectivo</option>
+                            <option value="@((int)PaymentMethod.Transferencia)">Transferencia</option>
+                            <option value="@((int)PaymentMethod.CuentaPersonal)">Cuenta personal</option>
+                            <option value="@((int)PaymentMethod.Combinado)">Combinado</option>
                         </select>
+                        <span asp-validation-for="PaymentMethod" class="text-danger"></span>
                     </div>
 
-                    <div class="sale-field" id="accountBox">
+                    <div class="sale-field sale-payment-detail" id="accountBox">
                         <label asp-for="PersonalAccountId" class="form-label"></label>
-                        <select asp-for="PersonalAccountId" class="form-select">
-                            <option value="">Seleccione...</option>
+                        <select asp-for="PersonalAccountId"
+                                id="personalAccount"
+                                class="form-select account-search"
+                                style="width: 100%;">
+                            <option value=""></option>
                             @foreach (var account in Model.Accounts)
                             {
-                                <option value="@account.Id">@account.FullName</option>
+                                <option value="@account.Id">@account.FullName — DNI @account.DNI</option>
                             }
                         </select>
                         <span asp-validation-for="PersonalAccountId" class="text-danger"></span>
+                    </div>
+
+                    <div id="combinedPaymentFields" class="sale-combined-payment-fields sale-payment-detail">
+                        <div class="sale-field">
+                            <label asp-for="CashAmount" class="form-label">Efectivo</label>
+                            <input asp-for="CashAmount"
+                                   id="cashAmount"
+                                   type="text"
+                                   inputmode="decimal"
+                                   autocomplete="off"
+                                   data-val="false"
+                                   value="@(Model.CashAmount == 0 ? string.Empty : Model.CashAmount.ToString("0.##", System.Globalization.CultureInfo.CurrentCulture))"
+                                   class="form-control"
+                                   placeholder="0,00" />
+                        </div>
+
+                        <div class="sale-field">
+                            <label asp-for="TransferAmount" class="form-label">Transferencia</label>
+                            <input asp-for="TransferAmount"
+                                   id="transferAmount"
+                                   type="text"
+                                   inputmode="decimal"
+                                   autocomplete="off"
+                                   data-val="false"
+                                   value="@(Model.TransferAmount == 0 ? string.Empty : Model.TransferAmount.ToString("0.##", System.Globalization.CultureInfo.CurrentCulture))"
+                                   class="form-control"
+                                   placeholder="0,00" />
+                        </div>
+
+                        <div id="combinedPaymentFeedback"
+                             class="sale-combined-payment-feedback"
+                             role="status"
+                             aria-live="polite">@combinedPaymentError</div>
                     </div>
                 </div>
 
@@ -68,7 +111,7 @@
                                         <option value="@product.Id"
                                                 data-price="@product.SalePrice.ToString(System.Globalization.CultureInfo.InvariantCulture)"
                                                 selected="@(Model.Lines[index].ProductId == product.Id ? "selected" : null)">
-                                            @product.Name — @product.SalePrice.ToString("C")
+                                            @product.Name — @product.SalePrice.ToString("C") · Stock @product.Quantity
                                         </option>
                                     }
                                 </select>
@@ -118,166 +161,5 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
-
-    <script>
-        const linesContainer = document.getElementById("lines");
-        const addLineButton = document.getElementById("addLine");
-        const totalElement = document.getElementById("total");
-        const paymentSelect = document.getElementById("payment");
-        const accountBox = document.getElementById("accountBox");
-
-        function initializeProductSearch(container) {
-            $(container).find(".product-search").each(function () {
-                const productSelect = $(this);
-
-                if (productSelect.hasClass("select2-hidden-accessible")) {
-                    return;
-                }
-
-                productSelect.select2({
-                    theme: "bootstrap-5",
-                    width: "100%",
-                    placeholder: "Buscar un producto...",
-                    allowClear: true,
-                    minimumResultsForSearch: 0,
-                    language: {
-                        noResults: function () {
-                            return "No se encontraron productos";
-                        }
-                    }
-                });
-            });
-        }
-
-        function destroyProductSearch(row) {
-            const productSelect = $(row).find(".product-search");
-
-            if (productSelect.hasClass("select2-hidden-accessible")) {
-                productSelect.select2("destroy");
-            }
-        }
-
-        function renumberLines() {
-            const rows = linesContainer.querySelectorAll(".sale-line");
-
-            rows.forEach((row, index) => {
-                row.querySelector(".product").name =
-                    `Lines[${index}].ProductId`;
-
-                row.querySelector(".quantity").name =
-                    `Lines[${index}].Quantity`;
-            });
-        }
-
-        function calculateTotal() {
-            let total = 0;
-
-            linesContainer.querySelectorAll(".sale-line").forEach(row => {
-                const productSelect = row.querySelector(".product");
-                const quantityInput = row.querySelector(".quantity");
-
-                const selectedOption = productSelect.selectedOptions[0];
-                const price = Number(selectedOption?.dataset.price ?? 0);
-                const quantity = Number(quantityInput.value ?? 0);
-
-                total += price * quantity;
-            });
-
-            totalElement.textContent = total.toLocaleString("es-AR", {
-                style: "currency",
-                currency: "ARS"
-            });
-        }
-
-        function validateQuantity(quantityInput) {
-            const quantity = Number(quantityInput.value);
-            const isValid = Number.isInteger(quantity) && quantity >= 1;
-
-            quantityInput.setCustomValidity(
-                isValid ? "" : "La cantidad debe ser un número entero mayor a cero."
-            );
-
-            return isValid;
-        }
-
-        function addProductLine() {
-            const sourceRow =
-                linesContainer.querySelector(".sale-line");
-
-            /*
-             * Antes de clonar eliminamos Select2 de la fila original.
-             * Así evitamos copiar el HTML interno generado por la librería.
-             */
-            destroyProductSearch(sourceRow);
-
-            const newRow = sourceRow.cloneNode(true);
-
-            initializeProductSearch(sourceRow);
-
-            newRow.querySelector(".product").value = "";
-            newRow.querySelector(".quantity").value = "1";
-
-            linesContainer.appendChild(newRow);
-
-            renumberLines();
-            initializeProductSearch(newRow);
-            calculateTotal();
-        }
-
-        function removeProductLine(event) {
-            const removeButton = event.target.closest(".remove");
-
-            if (!removeButton) {
-                return;
-            }
-
-            const rows = linesContainer.querySelectorAll(".sale-line");
-
-            if (rows.length <= 1) {
-                return;
-            }
-
-            const row = removeButton.closest(".sale-line");
-
-            destroyProductSearch(row);
-            row.remove();
-
-            renumberLines();
-            calculateTotal();
-        }
-
-        function handleQuantityInput(event) {
-            if (!event.target.classList.contains("quantity")) {
-                return;
-            }
-
-            validateQuantity(event.target);
-            calculateTotal();
-        }
-
-        function updateAccountVisibility() {
-            accountBox.style.display =
-                paymentSelect.value === "3" ? "block" : "none";
-        }
-
-        addLineButton.addEventListener("click", addProductLine);
-        linesContainer.addEventListener("click", removeProductLine);
-        linesContainer.addEventListener("input", handleQuantityInput);
-
-        $(linesContainer).on(
-            "change",
-            ".product-search",
-            calculateTotal
-        );
-
-        paymentSelect.addEventListener(
-            "change",
-            updateAccountVisibility
-        );
-
-        initializeProductSearch(linesContainer);
-        linesContainer.querySelectorAll(".quantity").forEach(validateQuantity);
-        updateAccountVisibility();
-        calculateTotal();
-    </script>
+    <script src="~/js/salesCreate.js" asp-append-version="true"></script>
 }

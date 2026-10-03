@@ -29,11 +29,13 @@ $(function () {
             {
                 data: null,
                 render: sale => {
-                    const account = sale.account && sale.account !== "-"
-                        ? `<small class="d-block text-muted">${escapeSalesHistoryHtml(sale.account)}</small>`
+                    const paymentDetail = sale.paymentBreakdown ||
+                        (sale.account && sale.account !== "-" ? sale.account : "");
+                    const detail = paymentDetail
+                        ? `<small class="d-block text-muted">${escapeSalesHistoryHtml(paymentDetail)}</small>`
                         : "";
 
-                    return `<span class="fw-semibold">${escapeSalesHistoryHtml(sale.paymentMethod)}</span>${account}`;
+                    return `<span class="fw-semibold">${escapeSalesHistoryHtml(sale.paymentMethod)}</span>${detail}`;
                 }
             },
             {
@@ -48,10 +50,11 @@ $(function () {
             },
             { data: "user" },
             {
-                data: "isVoided",
-                render: isVoided => isVoided
-                    ? '<span class="status-badge status-inactive">Anulada</span>'
-                    : '<span class="status-badge status-active">Vigente</span>'
+                data: "returnStatus",
+                render: status => {
+                    const css = status === "Vigente" ? "status-active" : status === "Anulación parcial" ? "status-warning" : "status-inactive";
+                    return `<span class="status-badge ${css}">${escapeSalesHistoryHtml(status)}</span>`;
+                }
             },
             {
                 data: "detailUrl",
@@ -59,7 +62,7 @@ $(function () {
                 className: "text-end",
                 render: detailUrl => `
                     <a href="${detailUrl}" class="btn btn-soft-secondary btn-modern-sm">
-                        <i class="bi bi-eye me-1"></i> Detalle
+                        Detalle
                     </a>`
             }
         ]

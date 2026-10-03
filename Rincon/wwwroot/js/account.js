@@ -14,7 +14,7 @@ $(function () {
             },
             {
                 data: "debt",
-                render: debt => {
+                render: (debt, type, account) => {
                     const debtClass = Number(debt) > 0 ? "text-danger" : "text-success";
                     return `<span class="fw-bold ${debtClass}">${formatAccountMoney(debt)}</span>`;
                 }

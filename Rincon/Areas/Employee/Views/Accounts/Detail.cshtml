@@ -26,13 +26,13 @@
     </div>
 
     <div class="row g-3 mb-4">
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="detail-metric-card">
                 <div class="detail-metric-label">Deuda actual</div>
                 <div class="detail-metric-value text-danger">@Model.CurrentDebt.ToString("C")</div>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="detail-metric-card">
                 <div class="detail-metric-label">Adeuda desde</div>
                 <div class="detail-metric-value">
@@ -40,13 +40,26 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="detail-metric-card">
                 <div class="detail-metric-label">Dirección</div>
                 <div class="detail-metric-value">@(Model.Account.Address ?? "-")</div>
             </div>
         </div>
+        <div class="col-md-3">
+            <div class="detail-metric-card">
+                <div class="detail-metric-label">Saldo inicial cargado</div>
+                <div class="detail-metric-value">@Model.Account.OpeningBalance.ToString("C")</div>
+            </div>
+        </div>
     </div>
+
+    @if (Model.Account.OpeningBalance > 0)
+    {
+        <div class="alert alert-info">
+            Esta cuenta comenzó con una deuda anterior de <strong>@Model.Account.OpeningBalance.ToString("C")</strong>, sin productos asociados. Los pagos se imputan primero a ese saldo.
+        </div>
+    }
 
     @if (Model.CurrentDebt > 0)
     {
@@ -54,6 +67,7 @@
             <form asp-action="Pay" method="post" class="personal-account-settle-form">
                 @Html.AntiForgeryToken()
                 <input type="hidden" name="Id" value="@Model.Account.Id" />
+                <input type="hidden" name="OperationId" value="@Model.PaymentOperationId" />
 
                 <div>
                     <span class="section-kicker">Cobro</span>
@@ -108,6 +122,18 @@
                         <th>Estado</th>
                     </tr>
                 </thead>
+            </table>
+        </div>
+    </div>
+
+    <div class="content-card mt-4">
+        <div class="mb-3">
+            <span class="section-kicker">Anulaciones</span>
+            <h2 class="section-title mb-0">Anulaciones registradas</h2>
+        </div>
+        <div class="table-responsive custom-table-wrapper">
+            <table id="accountCancellationsTable" class="table custom-table mb-0 w-100" data-account-id="@Model.Account.Id">
+                <thead><tr><th>Fecha</th><th>Venta</th><th>Productos</th><th>Reintegro</th><th>Monto</th><th>Usuario</th><th>Motivo</th></tr></thead>
             </table>
         </div>
     </div>

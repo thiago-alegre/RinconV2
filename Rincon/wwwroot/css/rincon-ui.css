@@ -2070,14 +2070,53 @@ table.dataTable tbody td {
 
 .sale-meta-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: minmax(240px, 285px) 210px minmax(0, 1fr);
     gap: 16px;
-    align-items: end;
+    align-items: start;
     margin-bottom: 28px;
 }
 
 .sale-field {
     min-width: 0;
+}
+
+.sale-combined-payment-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    align-items: start;
+    min-width: 0;
+}
+
+.sale-combined-payment-fields[hidden] {
+    display: none;
+}
+
+.sale-payment-method-field {
+    width: 210px;
+}
+
+.sale-payment-detail {
+    min-width: 0;
+}
+
+.sale-combined-payment-feedback {
+    grid-column: 1 / -1;
+    color: var(--rv2-muted);
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.sale-combined-payment-feedback:empty {
+    display: none;
+}
+
+.sale-combined-payment-feedback.is-valid {
+    color: var(--bs-success);
+}
+
+.sale-combined-payment-feedback.is-invalid {
+    color: var(--bs-danger);
 }
 
 .sale-lines-header,
@@ -2169,9 +2208,8 @@ table.dataTable tbody td {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    #accountBox {
+    .sale-payment-detail {
         grid-column: 1 / -1;
-        max-width: 50%;
     }
 
     .cash-overview {
@@ -2196,9 +2234,16 @@ table.dataTable tbody td {
         grid-template-columns: 1fr;
     }
 
-    #accountBox {
+    .sale-combined-payment-fields {
+        grid-template-columns: 1fr;
+    }
+
+    .sale-payment-method-field {
+        width: 100%;
+    }
+
+    .sale-payment-detail {
         grid-column: auto;
-        max-width: none;
     }
 
     .sale-lines-header {

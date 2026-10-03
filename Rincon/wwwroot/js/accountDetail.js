@@ -51,6 +51,24 @@ $(function () {
             { data: "notes" }
         ]
     });
+
+    createServerDataTable("#accountCancellationsTable", {
+        order: [[0, "desc"]],
+        ajax: {
+            url: "/Employee/Accounts/GetCancellations",
+            type: "GET",
+            data: request => { request.id = accountId; }
+        },
+        columns: [
+            { data: "date" },
+            { data: "sale" },
+            { data: "products" },
+            { data: "refundMethod" },
+            { data: "total", render: value => `<span class="fw-bold text-danger">-${formatAccountDetailMoney(value)}</span>` },
+            { data: "user" },
+            { data: "reason" }
+        ]
+    });
 });
 
 function formatAccountDetailMoney(value) {

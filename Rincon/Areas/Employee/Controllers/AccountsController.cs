@@ -30,49 +30,7 @@ public class AccountsController : Controller
     public async Task<IActionResult> GetAll()
     {
         var request = DataTableRequest.From(Request);
-        var totalsQuery = _db.PersonalAccounts
-            .AsNoTracking()
-            .Select(account => new
-            {
-                account.Id,
-                account.FullName,
-                account.DNI,
-                account.Phone,
-                account.Address,
-                account.isActive,
-                SalesTotal = _db.DirectSales
-                    .Where(sale =>
-                        sale.PersonalAccountId == account.Id &&
-                        sale.PaymentMethod == PaymentMethod.CuentaPersonal &&
-                        !sale.IsVoided)
-                    .Sum(sale => (decimal?) sale.Total) ?? 0m,
-                PaymentsTotal = _db.PersonalAccountPayments
-                    .Where(payment => payment.PersonalAccountId == account.Id)
-                    .Sum(payment => (decimal?) payment.Amount) ?? 0m,
-                OldestSaleDate = _db.DirectSales
-                    .Where(sale =>
-                        sale.PersonalAccountId == account.Id &&
-                        sale.PaymentMethod == PaymentMethod.CuentaPersonal &&
-                        !sale.IsVoided)
-                    .Min(sale => (DateTime?) sale.Date)
-            });
-
-        var query = totalsQuery.Select(account => new
-        {
-            account.Id,
-            account.FullName,
-            account.DNI,
-            account.Phone,
-            account.Address,
-            account.isActive,
-            DebtValue = account.SalesTotal > account.PaymentsTotal
-                ? account.SalesTotal - account.PaymentsTotal
-                : 0m,
-            DebtSinceValue = account.SalesTotal > account.PaymentsTotal
-                ? account.OldestSaleDate
-                : null
-        });
-
+        var query = AccountLedger.Accounts(_db);
         var recordsTotal = await query.CountAsync();
 
         if (!string.IsNullOrWhiteSpace(request.Search))
@@ -169,6 +127,11 @@ public class AccountsController : Controller
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Upsert(PersonalAccount input)
     {
+        if (input.Id == 0)
+        {
+            BusinessInput.Money(ModelState, nameof(input.OpeningBalance), input.OpeningBalance);
+        }
+
         if (!ModelState.IsValid)
         {
             return View(input);
@@ -179,6 +142,7 @@ public class AccountsController : Controller
         if (input.Id == 0)
         {
             account = new PersonalAccount();
+            account.OpeningBalance = input.OpeningBalance;
             _db.PersonalAccounts.Add(account);
         }
         else
@@ -230,7 +194,14 @@ public class AccountsController : Controller
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Pay(PersonalAccountSettleVM input)
     {
-        var accountExists = await _db.PersonalAccounts.AnyAsync(account => account.Id == input.Id);
+        await using var transaction = await _db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+        if (input.OperationId == Guid.Empty) return BadRequest();
+        var previous = await _db.PersonalAccountPayments.AsNoTracking().FirstOrDefaultAsync(p => p.OperationId == input.OperationId);
+        if (previous is not null)
+            return previous.UserId == User.FindFirstValue(ClaimTypes.NameIdentifier) && previous.PersonalAccountId == input.Id
+                ? RedirectToAction(nameof(Detail), new { id = previous.PersonalAccountId }) : Conflict();
+        if (!ModelState.IsValid || input.Notes?.Length > 500) return BadRequest();
+        var accountExists = await _db.PersonalAccounts.AnyAsync(account => account.Id == input.Id && account.isActive);
 
         if (!accountExists)
         {
@@ -255,6 +226,8 @@ public class AccountsController : Controller
             return RedirectToAction(nameof(Detail), new { id = input.Id });
         }
 
+        if (!BusinessInput.IsMoney(amount)) return BadRequest();
+
         if (amount > summary.Amount)
         {
             TempData["error"] = "El pago no puede superar la deuda pendiente";
@@ -269,6 +242,7 @@ public class AccountsController : Controller
 
         _db.PersonalAccountPayments.Add(new PersonalAccountPayment
         {
+            OperationId = input.OperationId,
             PersonalAccountId = input.Id,
             Amount = amount,
             Notes = string.IsNullOrWhiteSpace(input.Notes) ? null : input.Notes.Trim(),
@@ -278,6 +252,7 @@ public class AccountsController : Controller
         });
 
         await _db.SaveChangesAsync();
+        await transaction.CommitAsync();
         TempData["success"] = "Pago registrado correctamente";
         return RedirectToAction(nameof(Detail), new { id = input.Id });
     }
@@ -291,8 +266,7 @@ public class AccountsController : Controller
             .AsNoTracking()
             .Where(item =>
                 item.DirectSale.PersonalAccountId == id &&
-                item.DirectSale.PaymentMethod == PaymentMethod.CuentaPersonal &&
-                !item.DirectSale.IsVoided);
+                item.DirectSale.PaymentMethod == PaymentMethod.CuentaPersonal);
 
         var recordsTotal = await query.CountAsync();
 
@@ -351,22 +325,30 @@ public class AccountsController : Controller
                 item.ProductName,
                 item.Quantity,
                 item.UnitPrice,
-                item.Subtotal
+                item.Subtotal,
+                ReturnedQuantity = item.ReturnItems.Sum(value => value.Quantity),
+                ReturnedTotal = item.ReturnItems.Sum(value => value.Subtotal)
             })
             .ToListAsync();
 
         var data = rows.Select(item =>
         {
             var balance = saleBalances.GetValueOrDefault(item.DirectSaleId);
-            var status = GetSaleStatus(balance);
+            var status = item.ReturnedQuantity >= item.Quantity
+                ? (Text: "Anulada", ClassName: "status-inactive")
+                : item.ReturnedQuantity > 0
+                    ? (Text: "Anulación parcial", ClassName: "status-warning")
+                    : GetSaleStatus(balance);
 
             return new
             {
                 date = item.Date.ToString("dd/MM/yyyy HH:mm"),
                 product = item.ProductName,
-                quantity = FormatQuantity(item.Quantity),
+                quantity = item.ReturnedQuantity > 0
+                    ? $"{DisplayFormatting.Quantity(item.Quantity)} · anulada {DisplayFormatting.Quantity(item.ReturnedQuantity)}"
+                    : DisplayFormatting.Quantity(item.Quantity),
                 item.UnitPrice,
-                item.Subtotal,
+                subtotal = item.Subtotal - item.ReturnedTotal,
                 status = status.Text,
                 statusClass = status.ClassName
             };
@@ -378,6 +360,67 @@ public class AccountsController : Controller
             recordsTotal,
             recordsFiltered,
             data
+        });
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetCancellations(int id)
+    {
+        var request = DataTableRequest.From(Request);
+        var query = _db.DirectSaleReturns
+            .AsNoTracking()
+            .Where(item => item.DirectSale.PersonalAccountId == id);
+        var recordsTotal = await query.CountAsync();
+
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var search = DataTableSearchTerm.Create(request.Search);
+            query = query.Where(item =>
+                (item.Reason != null && EF.Functions.ILike(item.Reason, search.Pattern)) ||
+                item.Items.Any(detail => EF.Functions.ILike(detail.ProductName, search.Pattern)) ||
+                (search.HasNumber && (item.Total == search.Number || item.DirectSaleId == search.Number)));
+        }
+
+        var recordsFiltered = await query.CountAsync();
+        var rows = await query
+            .OrderByDescending(item => item.Date)
+            .ThenByDescending(item => item.Id)
+            .Skip(request.Start)
+            .Take(request.Length)
+            .Select(item => new
+            {
+                item.Date,
+                item.DirectSaleId,
+                Products = item.Items.Select(detail => new { detail.ProductName, detail.Quantity }).ToList(),
+                item.RefundMethod,
+                item.Total,
+                User = item.User != null ? item.User.FullName : null,
+                item.Reason
+            })
+            .ToListAsync();
+
+        return Json(new
+        {
+            draw = request.Draw,
+            recordsTotal,
+            recordsFiltered,
+            data = rows.Select(item => new
+            {
+                date = item.Date.ToString("dd/MM/yyyy HH:mm"),
+                sale = $"#{item.DirectSaleId}",
+                products = string.Join(", ", item.Products.Select(detail =>
+                    $"{detail.ProductName} x{DisplayFormatting.Quantity(detail.Quantity)}")),
+                refundMethod = item.RefundMethod switch
+                {
+                    PaymentMethod.Efectivo => "Efectivo",
+                    PaymentMethod.Transferencia => "Transferencia",
+                    PaymentMethod.CuentaPersonal => "Ajuste de cuenta",
+                    _ => "-"
+                },
+                item.Total,
+                user = item.User ?? "Sin usuario",
+                reason = item.Reason ?? "-"
+            })
         });
     }
 
@@ -469,96 +512,13 @@ public class AccountsController : Controller
     private async Task<Dictionary<int, DebtSummary>> GetDebtSummariesAsync(IEnumerable<int> accountIds)
     {
         var ids = accountIds.Distinct().ToList();
-
-        if (ids.Count == 0)
-        {
-            return new Dictionary<int, DebtSummary>();
-        }
-
-        var sales = await _db.DirectSales
-            .AsNoTracking()
-            .Where(sale =>
-                sale.PersonalAccountId.HasValue &&
-                ids.Contains(sale.PersonalAccountId.Value) &&
-                sale.PaymentMethod == PaymentMethod.CuentaPersonal &&
-                !sale.IsVoided)
-            .OrderBy(sale => sale.Date)
-            .ThenBy(sale => sale.Id)
-            .Select(sale => new
-            {
-                AccountId = sale.PersonalAccountId!.Value,
-                sale.Date,
-                sale.Total
-            })
-            .ToListAsync();
-
-        var payments = await _db.PersonalAccountPayments
-            .AsNoTracking()
-            .Where(payment => ids.Contains(payment.PersonalAccountId))
-            .GroupBy(payment => payment.PersonalAccountId)
-            .Select(group => new
-            {
-                AccountId = group.Key,
-                Total = group.Sum(payment => payment.Amount)
-            })
-            .ToDictionaryAsync(item => item.AccountId, item => item.Total);
-
-        var result = ids.ToDictionary(id => id, _ => DebtSummary.Empty);
-
-        foreach (var salesGroup in sales.GroupBy(sale => sale.AccountId))
-        {
-            var availablePayments = payments.GetValueOrDefault(salesGroup.Key);
-            var debt = 0m;
-            DateTime? debtSince = null;
-
-            foreach (var sale in salesGroup)
-            {
-                var amountPaid = Math.Min(availablePayments, sale.Total);
-                var remaining = sale.Total - amountPaid;
-                availablePayments -= amountPaid;
-
-                if (remaining <= 0)
-                {
-                    continue;
-                }
-
-                debt += remaining;
-                debtSince ??= sale.Date;
-            }
-
-            result[salesGroup.Key] = new DebtSummary(debt, debtSince);
-        }
-
-        return result;
+        return await AccountLedger.Accounts(_db).Where(a => ids.Contains(a.Id))
+            .ToDictionaryAsync(a => a.Id, a => new DebtSummary(a.DebtValue, a.DebtSinceValue));
     }
 
-    private async Task<Dictionary<int, SaleBalance>> GetSaleBalancesAsync(int accountId)
-    {
-        var sales = await _db.DirectSales
-            .AsNoTracking()
-            .Where(sale =>
-                sale.PersonalAccountId == accountId &&
-                sale.PaymentMethod == PaymentMethod.CuentaPersonal &&
-                !sale.IsVoided)
-            .OrderBy(sale => sale.Date)
-            .ThenBy(sale => sale.Id)
-            .Select(sale => new { sale.Id, sale.Total })
-            .ToListAsync();
-        var availablePayments = await _db.PersonalAccountPayments
-            .AsNoTracking()
-            .Where(payment => payment.PersonalAccountId == accountId)
-            .SumAsync(payment => (decimal?) payment.Amount) ?? 0m;
-        var result = new Dictionary<int, SaleBalance>();
-
-        foreach (var sale in sales)
-        {
-            var amountPaid = Math.Min(availablePayments, sale.Total);
-            result[sale.Id] = new SaleBalance(sale.Total, amountPaid);
-            availablePayments -= amountPaid;
-        }
-
-        return result;
-    }
+    private async Task<Dictionary<int, SaleBalance>> GetSaleBalancesAsync(int accountId) =>
+        await AccountLedger.Sales(_db).Where(s => s.AccountId == accountId)
+            .ToDictionaryAsync(s => s.Id, s => new SaleBalance(s.Total, s.AmountPaid));
 
     private static (string Text, string ClassName) GetSaleStatus(SaleBalance? balance)
     {
@@ -570,13 +530,6 @@ public class AccountsController : Controller
         return balance.AmountPaid >= balance.Total
             ? ("Saldada", "status-active")
             : ("Pago parcial", "status-warning");
-    }
-
-    private static string FormatQuantity(decimal quantity)
-    {
-        return quantity % 1 == 0
-            ? quantity.ToString("N0")
-            : quantity.ToString("N2");
     }
 
     private sealed record DebtSummary(decimal Amount, DateTime? Since)
