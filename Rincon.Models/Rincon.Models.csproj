@@ -11,8 +11,4 @@
 	<ItemGroup>
 	  <ProjectReference Include="..\Rincon.Utilities\Rincon.Utilities.csproj" />
 	</ItemGroup>
-  <ItemGroup>
-    <Compile Remove="ArticleBatch.cs;CashRegisterSession.cs;Category.cs;Sale.cs;SaleDetail.cs;SaleDetailBatch.cs;SaleReturn.cs;SaleReturnDetail.cs;SaleReturnDetailBatch.cs;SaleExchange.cs;SaleExchangeBatch.cs" />
-    <Compile Remove="ViewModels\ArticleVM.cs;ViewModels\CartItemVM.cs;ViewModels\CartVM.cs;ViewModels\CashRegisterVM.cs;ViewModels\ShoppingCartItemVM.cs;ViewModels\SalesIndexVM.cs;ViewModels\StatisticsVM.cs" />
-  </ItemGroup>
 </Project>

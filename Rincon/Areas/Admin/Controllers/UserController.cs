@@ -84,6 +84,10 @@ namespace Rincon.Areas.Admin.Controllers
             vm.RoleList = GetRoleList();
             vm.Email = NormalizeEmail(vm.Email);
             vm.DNI = NormalizeDni(vm.DNI);
+            if (vm.Role != SD.Role_Admin && vm.Role != SD.Role_Employee)
+                ModelState.AddModelError(nameof(vm.Role), "Seleccione un rol permitido.");
+            if (string.IsNullOrEmpty(vm.Id) && string.IsNullOrWhiteSpace(vm.NewPassword))
+                ModelState.AddModelError(nameof(vm.NewPassword), "Ingrese una contraseña inicial.");
 
             if (!IsNumericDni(vm.DNI))
             {
@@ -94,6 +98,8 @@ namespace Rincon.Areas.Admin.Controllers
             {
                 return View(vm);
             }
+
+            await using var transaction = await _db.Database.BeginTransactionAsync();
 
             if (string.IsNullOrEmpty(vm.Id))
             {
@@ -113,7 +119,7 @@ namespace Rincon.Areas.Admin.Controllers
                     EmailConfirmed = true
                 };
 
-                string defaultPassword = $"{dni}Aa!";
+                string defaultPassword = vm.NewPassword!;
 
                 var result = await _userManager.CreateAsync(user, defaultPassword);
 
@@ -124,9 +130,11 @@ namespace Rincon.Areas.Admin.Controllers
                     return View(vm);
                 }
 
-                await _userManager.AddToRoleAsync(user, vm.Role);
+                var roleResult = await _userManager.AddToRoleAsync(user, vm.Role);
+                if (!roleResult.Succeeded) { AddIdentityErrors(roleResult); return View(vm); }
+                await transaction.CommitAsync();
 
-                TempData["success"] = $"Usuario creado correctamente. Contraseña inicial: {defaultPassword}";
+                TempData["success"] = "Usuario creado correctamente";
                 return RedirectToAction(nameof(Index));
             }
             else
@@ -169,8 +177,12 @@ namespace Rincon.Areas.Admin.Controllers
                     return View(vm);
                 }
 
-                await _userManager.RemoveFromRolesAsync(user, oldRoles);
-                await _userManager.AddToRoleAsync(user, vm.Role);
+                var removeResult = await _userManager.RemoveFromRolesAsync(user, oldRoles);
+                if (!removeResult.Succeeded) { AddIdentityErrors(removeResult); return View(vm); }
+                var addResult = await _userManager.AddToRoleAsync(user, vm.Role);
+                if (!addResult.Succeeded) { AddIdentityErrors(addResult); return View(vm); }
+                var stampResult = await _userManager.UpdateSecurityStampAsync(user);
+                if (!stampResult.Succeeded) { AddIdentityErrors(stampResult); return View(vm); }
 
                 if (!string.IsNullOrWhiteSpace(vm.NewPassword))
                 {
@@ -185,6 +197,7 @@ namespace Rincon.Areas.Admin.Controllers
                     }
                 }
 
+                await transaction.CommitAsync();
                 TempData["success"] = "Usuario actualizado correctamente";
                 return RedirectToAction(nameof(Index));
             }
@@ -298,6 +311,7 @@ namespace Rincon.Areas.Admin.Controllers
             }
 
             user.IsActive = !user.IsActive;
+            user.SecurityStamp = Guid.NewGuid().ToString();
 
             if (user.IsActive)
             {

@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Rincon.Models
 {
@@ -23,6 +24,10 @@ namespace Rincon.Models
 
         [Display(Name = "Fecha de alta")]
         public DateTime Date { get; set; } = DateTime.Now;
+
+        [Column(TypeName = "decimal(18,2)")]
+        [Display(Name = "Saldo pendiente anterior")]
+        public decimal OpeningBalance { get; set; }
 
         [Display(Name = "Estado")]
         public bool isActive { get; set; } = true;

@@ -8,6 +8,7 @@ using Rincon.Models;
 using Rincon.Models.ViewModels;
 using Rincon.Utilities;
 using Rincon.Utilities.Enums;
+using System.Data;
 
 namespace Rincon.Areas.Employee.Controllers;
 
@@ -28,7 +29,7 @@ public class SalesController : Controller
     [HttpGet]
     public IActionResult Index(DateTime? dateFrom, DateTime? dateTo, string? status)
     {
-        var (from, to) = NormalizeDateRange(dateFrom, dateTo);
+        var (from, to) = BusinessInput.NormalizeDateRange(dateFrom, dateTo);
         ViewBag.DateFrom = from;
         ViewBag.DateTo = to;
         ViewBag.Status = NormalizeStatus(status);
@@ -43,8 +44,8 @@ public class SalesController : Controller
         string? status)
     {
         var request = DataTableRequest.From(Request);
-        var (from, to) = NormalizeDateRange(dateFrom, dateTo);
-        var endExclusive = to.AddDays(1);
+        var (from, to) = BusinessInput.NormalizeDateRange(dateFrom, dateTo);
+        var endExclusive = BusinessInput.ExclusiveEnd(to);
         var normalizedStatus = NormalizeStatus(status);
 
         var query = _db.DirectSales
@@ -52,12 +53,13 @@ public class SalesController : Controller
             .Include(sale => sale.User)
             .Include(sale => sale.PersonalAccount)
             .Include(sale => sale.Items)
+            .Include(sale => sale.Returns)
             .Where(sale => sale.Date >= from && sale.Date < endExclusive);
 
         query = normalizedStatus switch
         {
-            "active" => query.Where(sale => !sale.IsVoided),
-            "voided" => query.Where(sale => sale.IsVoided),
+            "active" => query.Where(sale => sale.Returns.Sum(item => item.Total) < sale.Total),
+            "voided" => query.Where(sale => sale.Returns.Sum(item => item.Total) >= sale.Total),
             _ => query
         };
 
@@ -70,8 +72,10 @@ public class SalesController : Controller
             var matchesCash = search.MatchesLabel("Efectivo");
             var matchesTransfer = search.MatchesLabel("Transferencia");
             var matchesAccount = search.MatchesLabel("Cuenta personal");
+            var matchesCombined = search.MatchesLabel("Combinado");
             var matchesActive = search.MatchesLabel("Vigente");
             var matchesVoided = search.MatchesLabel("Anulada");
+            var matchesPartialCancellation = search.MatchesLabel("Anulación parcial");
 
             query = query.Where(sale =>
                 (sale.User != null &&
@@ -91,6 +95,8 @@ public class SalesController : Controller
                     (sale.Id == search.Number ||
                      sale.Total == search.Number ||
                      sale.TotalCost == search.Number ||
+                     sale.CashAmount == search.Number ||
+                     sale.TransferAmount == search.Number ||
                      sale.Total - sale.TotalCost == search.Number)) ||
                 (date != null &&
                     sale.Date.Day == date.Day &&
@@ -101,8 +107,10 @@ public class SalesController : Controller
                 (matchesCash && sale.PaymentMethod == PaymentMethod.Efectivo) ||
                 (matchesTransfer && sale.PaymentMethod == PaymentMethod.Transferencia) ||
                 (matchesAccount && sale.PaymentMethod == PaymentMethod.CuentaPersonal) ||
-                (matchesActive && !sale.IsVoided) ||
-                (matchesVoided && sale.IsVoided));
+                (matchesCombined && sale.PaymentMethod == PaymentMethod.Combinado) ||
+                (matchesActive && sale.Returns.Sum(item => item.Total) == 0) ||
+                (matchesPartialCancellation && sale.Returns.Sum(item => item.Total) > 0 && sale.Returns.Sum(item => item.Total) < sale.Total) ||
+                (matchesVoided && sale.Returns.Sum(item => item.Total) >= sale.Total));
         }
 
         var recordsFiltered = await query.CountAsync();
@@ -128,8 +136,8 @@ public class SalesController : Controller
                 ? query.OrderBy(sale => sale.User != null ? sale.User.FullName : string.Empty)
                 : query.OrderByDescending(sale => sale.User != null ? sale.User.FullName : string.Empty),
             7 => request.IsAscending
-                ? query.OrderBy(sale => sale.IsVoided)
-                : query.OrderByDescending(sale => sale.IsVoided),
+                ? query.OrderBy(sale => sale.Returns.Sum(item => item.Total))
+                : query.OrderByDescending(sale => sale.Returns.Sum(item => item.Total)),
             _ => query.OrderByDescending(sale => sale.Date).ThenByDescending(sale => sale.Id)
         };
 
@@ -144,17 +152,20 @@ public class SalesController : Controller
             date = sale.Date.ToString("dd/MM/yyyy HH:mm"),
             products = string.Join(", ", sale.Items
                 .OrderBy(item => item.Id)
-                .Select(item => $"{item.ProductName} x{FormatQuantity(item.Quantity)}")),
-            paymentMethod = GetPaymentMethodName(sale.PaymentMethod),
+                .Select(item => $"{item.ProductName} x{DisplayFormatting.Quantity(item.Quantity)}")),
+            paymentMethod = DisplayFormatting.PaymentMethodName(sale.PaymentMethod),
+            paymentBreakdown = sale.PaymentMethod == PaymentMethod.Combinado
+                ? $"Efectivo {sale.CashAmount:C} · Transferencia {sale.TransferAmount:C}"
+                : null,
             account = sale.PaymentMethod == PaymentMethod.CuentaPersonal
                 ? sale.PersonalAccount?.FullName ?? "Cuenta no disponible"
                 : "-",
-            sale.Total,
-            profit = sale.Total - sale.TotalCost,
+            total = sale.Total - sale.Returns.Sum(item => item.Total),
+            profit = (sale.Total - sale.TotalCost) - sale.Returns.Sum(item => item.Total - item.TotalCost),
             user = string.IsNullOrWhiteSpace(sale.User?.FullName)
                 ? sale.User?.Email ?? "Sin usuario"
                 : sale.User.FullName,
-            sale.IsVoided,
+            returnStatus = GetCancellationStatus(sale),
             detailUrl = Url.Action(nameof(Detail), new { id = sale.Id })
         });
 
@@ -175,62 +186,19 @@ public class SalesController : Controller
             .Include(item => item.Items)
             .Include(item => item.User)
             .Include(item => item.PersonalAccount)
-            .Include(item => item.VoidedByUser)
+            .Include(item => item.Returns)
+                .ThenInclude(item => item.Items)
+            .Include(item => item.Returns)
+                .ThenInclude(item => item.User)
             .FirstOrDefaultAsync(item => item.Id == id);
 
         return sale is null ? NotFound() : View(sale);
     }
 
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Void(int id, string? reason)
-    {
-        var sale = await _db.DirectSales.FirstOrDefaultAsync(item => item.Id == id);
-
-        if (sale is null)
-        {
-            return NotFound();
-        }
-
-        if (sale.IsVoided)
-        {
-            TempData["error"] = "La venta ya se encuentra anulada";
-            return RedirectToAction(nameof(Detail), new { id });
-        }
-
-        if (sale.PaymentMethod == PaymentMethod.CuentaPersonal &&
-            await GetAppliedPaymentAsync(sale) > 0)
-        {
-            TempData["error"] =
-                "La venta tiene cobros de cuenta aplicados. Registre primero la devolución correspondiente antes de anularla.";
-            return RedirectToAction(nameof(Detail), new { id });
-        }
-
-        var normalizedReason = reason?.Trim();
-
-        if (normalizedReason?.Length > 500)
-        {
-            TempData["error"] = "El motivo no puede superar los 500 caracteres";
-            return RedirectToAction(nameof(Detail), new { id });
-        }
-
-        sale.IsVoided = true;
-        sale.VoidedAt = DateTime.Now;
-        sale.VoidedByUserId = _users.GetUserId(User);
-        sale.VoidReason = string.IsNullOrWhiteSpace(normalizedReason)
-            ? "Anulación solicitada por el usuario"
-            : normalizedReason;
-
-        await _db.SaveChangesAsync();
-
-        TempData["success"] = "La venta fue anulada y dejó de impactar en el balance";
-        return RedirectToAction(nameof(Detail), new { id });
-    }
-
     [HttpGet]
     public async Task<IActionResult> Create()
     {
-        var viewModel = new DirectSaleCreateVM();
+        var viewModel = new DirectSaleCreateVM { OperationId = Guid.NewGuid() };
         await LoadAsync(viewModel);
 
         return View(viewModel);
@@ -239,6 +207,16 @@ public class SalesController : Controller
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(DirectSaleCreateVM vm)
     {
+        if (vm.OperationId == Guid.Empty)
+            return BadRequest(); // Old forms must be reopened; never silently assign a retry a new identity.
+        var previous = await _db.DirectSales.AsNoTracking()
+            .FirstOrDefaultAsync(sale => sale.OperationId == vm.OperationId);
+        if (previous is not null)
+            return previous.UserId == _users.GetUserId(User)
+                ? RedirectToAction(nameof(Detail), new { id = previous.Id }) : Conflict();
+        BusinessInput.Date(ModelState, vm.Date);
+        BusinessInput.Money(ModelState, nameof(vm.CashAmount), vm.CashAmount);
+        BusinessInput.Money(ModelState, nameof(vm.TransferAmount), vm.TransferAmount);
         vm.Lines = vm.Lines
             .Where(line => line.ProductId > 0 || line.Quantity != 1)
             .ToList();
@@ -248,20 +226,25 @@ public class SalesController : Controller
             ModelState.AddModelError(string.Empty, "Agregue al menos un producto");
         }
 
-        if (vm.PaymentMethod == PaymentMethod.CuentaPersonal && !vm.PersonalAccountId.HasValue)
+        if (vm.PaymentMethod == PaymentMethod.CuentaPersonal &&
+            !vm.PersonalAccountId.HasValue)
         {
             ModelState.AddModelError(
                 nameof(vm.PersonalAccountId),
                 "Seleccione una cuenta personal");
         }
 
-        if (vm.PaymentMethod is PaymentMethod.Combinado)
+        if (vm.PaymentMethod is not PaymentMethod.Efectivo and
+                not PaymentMethod.Transferencia and
+                not PaymentMethod.CuentaPersonal and
+                not PaymentMethod.Combinado)
         {
             ModelState.AddModelError(
                 nameof(vm.PaymentMethod),
-                "Seleccione efectivo, transferencia o cuenta personal");
+                "Seleccione una forma de pago válida");
         }
 
+        await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         var productIds = vm.Lines
             .Select(line => line.ProductId)
             .Distinct()
@@ -269,6 +252,14 @@ public class SalesController : Controller
         var products = await _db.Products
             .Where(product => productIds.Contains(product.Id) && product.IsActive)
             .ToDictionaryAsync(product => product.Id);
+
+        foreach (var group in vm.Lines.Where(line => line.ProductId > 0).GroupBy(line => line.ProductId))
+        {
+            if (products.TryGetValue(group.Key, out var product) && group.Sum(line => (long)line.Quantity) > product.Quantity)
+            {
+                ModelState.AddModelError(string.Empty, $"Stock insuficiente para {product.Name}. Disponible: {product.Quantity}");
+            }
+        }
 
         foreach (var line in vm.Lines)
         {
@@ -280,6 +271,33 @@ public class SalesController : Controller
             }
         }
 
+        var total = vm.Lines
+            .Where(line => products.ContainsKey(line.ProductId) && line.Quantity > 0)
+            .Sum(line => products[line.ProductId].SalePrice * line.Quantity);
+
+        BusinessInput.Money(ModelState, "Total", total, true);
+
+        if (vm.PaymentMethod == PaymentMethod.Combinado)
+        {
+            ValidateCombinedPayment(vm, total);
+        }
+        else if (vm.PaymentMethod == PaymentMethod.CuentaPersonal &&
+                 vm.PersonalAccountId.HasValue)
+        {
+            var accountExists = await _db.PersonalAccounts
+                .AsNoTracking()
+                .AnyAsync(account =>
+                    account.Id == vm.PersonalAccountId.Value &&
+                    account.isActive);
+
+            if (!accountExists)
+            {
+                ModelState.AddModelError(
+                    nameof(vm.PersonalAccountId),
+                    "La cuenta personal seleccionada no está disponible");
+            }
+        }
+
         if (!ModelState.IsValid)
         {
             await LoadAsync(vm);
@@ -288,11 +306,18 @@ public class SalesController : Controller
 
         var sale = new DirectSale
         {
+            OperationId = vm.OperationId,
             Date = vm.Date,
             PaymentMethod = vm.PaymentMethod,
             PersonalAccountId = vm.PaymentMethod == PaymentMethod.CuentaPersonal
                 ? vm.PersonalAccountId
                 : null,
+            CashAmount = vm.PaymentMethod == PaymentMethod.Combinado
+                ? vm.CashAmount
+                : vm.PaymentMethod == PaymentMethod.Efectivo ? total : 0,
+            TransferAmount = vm.PaymentMethod == PaymentMethod.Combinado
+                ? vm.TransferAmount
+                : vm.PaymentMethod == PaymentMethod.Transferencia ? total : 0,
             UserId = _users.GetUserId(User)
         };
 
@@ -312,61 +337,183 @@ public class SalesController : Controller
             sale.Items.Add(item);
             sale.Total += item.Subtotal;
             sale.TotalCost += item.UnitCost * item.Quantity;
+            product.Quantity -= line.Quantity;
         }
 
         _db.DirectSales.Add(sale);
         await _db.SaveChangesAsync();
+        await transaction.CommitAsync();
 
         TempData["success"] = "Venta registrada correctamente";
         return RedirectToAction(nameof(Detail), new { id = sale.Id });
     }
 
-    private async Task<decimal> GetAppliedPaymentAsync(DirectSale sale)
+    [HttpGet]
+    public async Task<IActionResult> Void(int id)
     {
-        if (!sale.PersonalAccountId.HasValue)
+        var sale = await _db.DirectSales
+            .AsNoTracking()
+            .Include(item => item.Items)
+                .ThenInclude(item => item.ReturnItems)
+            .FirstOrDefaultAsync(item => item.Id == id);
+
+        if (sale is null) return NotFound();
+        if (sale.Returns.Sum(item => item.Total) >= sale.Total)
         {
-            return 0;
+            TempData["error"] = "La venta ya se encuentra anulada";
+            return RedirectToAction(nameof(Detail), new { id });
         }
 
-        var availablePayments = await _db.PersonalAccountPayments
-            .AsNoTracking()
-            .Where(payment => payment.PersonalAccountId == sale.PersonalAccountId.Value)
-            .SumAsync(payment => (decimal?)payment.Amount) ?? 0m;
-
-        var accountSales = await _db.DirectSales
-            .AsNoTracking()
-            .Where(item =>
-                item.PersonalAccountId == sale.PersonalAccountId &&
-                item.PaymentMethod == PaymentMethod.CuentaPersonal &&
-                !item.IsVoided)
-            .OrderBy(item => item.Date)
-            .ThenBy(item => item.Id)
-            .Select(item => new { item.Id, item.Total })
-            .ToListAsync();
-
-        foreach (var accountSale in accountSales)
+        var vm = new DirectSaleVoidVM
         {
-            var appliedPayment = Math.Min(availablePayments, accountSale.Total);
-
-            if (accountSale.Id == sale.Id)
+            IsAccountSale = sale.PaymentMethod == PaymentMethod.CuentaPersonal,
+            OperationId = Guid.NewGuid(),
+            SaleId = sale.Id,
+            RefundMethod = sale.PaymentMethod,
+            Lines = sale.Items.OrderBy(item => item.Id).Select(item => new DirectSaleVoidLineVM
             {
-                return appliedPayment;
-            }
+                DirectSaleItemId = item.Id,
+                ProductName = item.ProductName,
+                SoldQuantity = item.Quantity,
+                ReturnedQuantity = item.ReturnItems.Sum(returnItem => returnItem.Quantity),
+                UnitPrice = item.UnitPrice
+            }).ToList()
+        };
 
-            availablePayments -= appliedPayment;
-        }
-
-        return 0;
+        return View(vm);
     }
 
-    private static (DateTime From, DateTime To) NormalizeDateRange(
-        DateTime? dateFrom,
-        DateTime? dateTo)
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> Void(DirectSaleVoidVM vm)
     {
-        var from = (dateFrom ?? DateTime.Today.AddMonths(-1)).Date;
-        var to = (dateTo ?? DateTime.Today).Date;
+        if (vm.OperationId == Guid.Empty) return BadRequest();
+        var previous = await _db.DirectSaleReturns.AsNoTracking().FirstOrDefaultAsync(r => r.OperationId == vm.OperationId);
+        if (previous is not null)
+            return previous.UserId == _users.GetUserId(User) && previous.DirectSaleId == vm.SaleId
+                ? RedirectToAction(nameof(Detail), new { id = previous.DirectSaleId }) : Conflict();
+        BusinessInput.Date(ModelState, vm.Date);
+        if (vm.Lines.Any(l => l.Quantity < 0 || l.Quantity % 1 != 0 || l.Quantity > int.MaxValue))
+            return BadRequest();
+        await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var sale = await _db.DirectSales
+            .Include(item => item.Items)
+                .ThenInclude(item => item.ReturnItems)
+            .FirstOrDefaultAsync(item => item.Id == vm.SaleId);
 
-        return to < from ? (to, from) : (from, to);
+        if (sale is null) return NotFound();
+        if (sale.Returns.Sum(item => item.Total) >= sale.Total)
+        {
+            TempData["error"] = "La venta ya se encuentra anulada";
+            return RedirectToAction(nameof(Detail), new { id = vm.SaleId });
+        }
+
+        vm.IsAccountSale = sale.PaymentMethod == PaymentMethod.CuentaPersonal;
+        vm.RefundMethod = sale.PaymentMethod;
+
+        var requested = vm.Lines
+            .Where(item => item.Selected && item.Quantity > 0)
+            .GroupBy(item => item.DirectSaleItemId)
+            .Select(group => new DirectSaleVoidLineVM
+            {
+                DirectSaleItemId = group.Key,
+                Quantity = group.Sum(item => item.Quantity),
+                ReturnsToStock = group.Last().ReturnsToStock
+            })
+            .ToList();
+        if (requested.Count == 0)
+        {
+            ModelState.AddModelError(string.Empty, "Seleccioná al menos un producto para anular");
+        }
+
+        foreach (var line in requested)
+        {
+            var item = sale.Items.FirstOrDefault(value => value.Id == line.DirectSaleItemId);
+            var available = item is null ? 0 : item.Quantity - item.ReturnItems.Sum(value => value.Quantity);
+            if (item is null || line.Quantity % 1 != 0 || line.Quantity <= 0 || line.Quantity > available)
+            {
+                ModelState.AddModelError(string.Empty, "Revisá las cantidades seleccionadas; no pueden superar lo pendiente de anular");
+            }
+        }
+
+        if (!ModelState.IsValid)
+        {
+            await PopulateVoidLinesAsync(vm, sale);
+            return View(vm);
+        }
+
+        var isFullCancellation = sale.Items.All(item =>
+            requested.Where(line => line.DirectSaleItemId == item.Id).Sum(line => line.Quantity) ==
+            item.Quantity - item.ReturnItems.Sum(value => value.Quantity));
+        var saleReturn = new DirectSaleReturn
+        {
+            OperationId = vm.OperationId,
+            DirectSaleId = sale.Id,
+            Date = vm.Date,
+            RefundMethod = vm.RefundMethod,
+            Reason = string.IsNullOrWhiteSpace(vm.Reason) ? null : vm.Reason.Trim(),
+            UserId = _users.GetUserId(User)
+        };
+        var productIds = requested.Where(item => item.ReturnsToStock)
+            .Select(item => sale.Items.First(value => value.Id == item.DirectSaleItemId).ProductId)
+            .Distinct().ToList();
+        var products = await _db.Products.Where(item => productIds.Contains(item.Id)).ToDictionaryAsync(item => item.Id);
+
+        foreach (var line in requested)
+        {
+            var item = sale.Items.First(value => value.Id == line.DirectSaleItemId);
+            var returnItem = new DirectSaleReturnItem
+            {
+                DirectSaleItemId = item.Id,
+                ProductId = item.ProductId,
+                ProductName = item.ProductName,
+                Quantity = line.Quantity,
+                UnitPrice = item.UnitPrice,
+                UnitCost = item.UnitCost,
+                Subtotal = item.UnitPrice * line.Quantity,
+                ReturnsToStock = line.ReturnsToStock
+            };
+            saleReturn.Items.Add(returnItem);
+            saleReturn.Total += returnItem.Subtotal;
+            saleReturn.TotalCost += returnItem.UnitCost * returnItem.Quantity;
+            if (line.ReturnsToStock && products.TryGetValue(item.ProductId, out var product))
+            {
+                product.Quantity = checked(product.Quantity + Decimal.ToInt32(line.Quantity));
+            }
+        }
+
+        _db.DirectSaleReturns.Add(saleReturn);
+        await _db.SaveChangesAsync();
+        await transaction.CommitAsync();
+        TempData["success"] = isFullCancellation
+            ? "Venta anulada completamente"
+            : "Anulación parcial registrada correctamente";
+        return RedirectToAction(nameof(Detail), new { id = sale.Id });
+    }
+
+    private static string GetCancellationStatus(DirectSale sale)
+    {
+        var returned = sale.Returns.Sum(item => item.Total);
+        if (returned <= 0) return "Vigente";
+        return returned >= sale.Total ? "Anulada" : "Anulación parcial";
+    }
+
+    private static Task PopulateVoidLinesAsync(DirectSaleVoidVM vm, DirectSale sale)
+    {
+        var requested = vm.Lines
+            .GroupBy(item => item.DirectSaleItemId)
+            .ToDictionary(item => item.Key, item => item.Last());
+        vm.Lines = sale.Items.OrderBy(item => item.Id).Select(item => new DirectSaleVoidLineVM
+        {
+            DirectSaleItemId = item.Id,
+            ProductName = item.ProductName,
+            SoldQuantity = item.Quantity,
+            ReturnedQuantity = item.ReturnItems.Sum(value => value.Quantity),
+            UnitPrice = item.UnitPrice,
+            Selected = requested.GetValueOrDefault(item.Id)?.Selected ?? false,
+            Quantity = requested.GetValueOrDefault(item.Id)?.Quantity ?? 0,
+            ReturnsToStock = requested.GetValueOrDefault(item.Id)?.ReturnsToStock ?? true
+        }).ToList();
+        return Task.CompletedTask;
     }
 
     private static string NormalizeStatus(string? status)
@@ -374,29 +521,39 @@ public class SalesController : Controller
         return status is "active" or "voided" ? status : "all";
     }
 
-    private static string GetPaymentMethodName(PaymentMethod paymentMethod)
+    private void ValidateCombinedPayment(DirectSaleCreateVM viewModel, decimal total)
     {
-        return paymentMethod switch
+        if (viewModel.CashAmount <= 0)
         {
-            PaymentMethod.Efectivo => "Efectivo",
-            PaymentMethod.Transferencia => "Transferencia",
-            PaymentMethod.CuentaPersonal => "Cuenta personal",
-            _ => "Sin especificar"
-        };
-    }
+            ModelState.AddModelError(
+                "CombinedPayment",
+                "Ingresá un monto en efectivo mayor a cero.");
 
-    private static string FormatQuantity(decimal quantity)
-    {
-        return quantity % 1 == 0
-            ? quantity.ToString("N0")
-            : quantity.ToString("N2");
+            return;
+        }
+
+        if (viewModel.TransferAmount <= 0)
+        {
+            ModelState.AddModelError(
+                "CombinedPayment",
+                "Ingresá un monto en transferencia mayor a cero.");
+
+            return;
+        }
+
+        if (viewModel.CashAmount + viewModel.TransferAmount != total)
+        {
+            ModelState.AddModelError(
+                "CombinedPayment",
+                $"La suma de efectivo y transferencia debe ser igual al total de la venta ({total:C}).");
+        }
     }
 
     private async Task LoadAsync(DirectSaleCreateVM vm)
     {
         vm.Products = await _db.Products
             .AsNoTracking()
-            .Where(product => product.IsActive)
+            .Where(product => product.IsActive && product.Quantity > 0)
             .OrderBy(product => product.Name)
             .ToListAsync();
         vm.Accounts = await _db.PersonalAccounts

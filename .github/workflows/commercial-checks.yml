@@ -1,0 +1,32 @@
+name: Commercial regression
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: audit
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 127.0.0.1:55439:5432
+        options: >-
+          --health-cmd "pg_isready -U audit"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 8.0.x
+      - name: Restore
+        run: dotnet restore tests/AuditChecks/AuditChecks.csproj
+      - name: PostgreSQL and HTTP regressions
+        run: dotnet run --project tests/AuditChecks/AuditChecks.csproj -c Release --no-restore
+      - name: Publish
+        run: dotnet publish Rincon/Rincon.csproj -c Release --no-restore -o artifacts/publish

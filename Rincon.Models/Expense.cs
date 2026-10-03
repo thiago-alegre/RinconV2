@@ -8,6 +8,9 @@ public class Expense
 {
     [Key]
     public int Id { get; set; }
+    public Guid? OperationId { get; set; }
+    [Timestamp]
+    public uint Version { get; set; }
 
     [Required]
     [Display(Name = "Fecha")]

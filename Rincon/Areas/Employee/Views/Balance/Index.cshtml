@@ -159,6 +159,15 @@
         {
             <div class="table-responsive">
                 <table class="table mb-0">
+                    <thead>
+                        <tr>
+                            <th>Fecha y hora</th>
+                            <th>Concepto</th>
+                            <th>Tipo</th>
+                            <th>Medio</th>
+                            <th class="text-end">Monto</th>
+                        </tr>
+                    </thead>
                     <tbody>
                         @foreach (var item in Model.RecentExpenses)
                         {
@@ -168,11 +177,17 @@
                                 ExpenseType.GastoNegocio => "Negocio",
                                 _ => "Retiro personal"
                             };
+                            var paymentMethod = item.PaymentMethod switch
+                            {
+                                PaymentMethod.Transferencia => "Transferencia",
+                                _ => "Efectivo"
+                            };
 
                             <tr>
-                                <td>@item.Date.ToString("dd/MM/yyyy")</td>
+                                <td>@item.Date.ToString("dd/MM/yyyy HH:mm")</td>
                                 <td>@item.Concept</td>
                                 <td>@expenseType</td>
+                                <td>@paymentMethod</td>
                                 <td class="text-end text-danger fw-bold">
                                     - @item.Amount.ToString("C")
                                 </td>

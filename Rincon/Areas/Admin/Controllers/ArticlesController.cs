@@ -22,12 +22,18 @@ public class ArticlesController : Controller
     };
 
     private readonly ApplicationDbContext _db;
-    private readonly IWebHostEnvironment _environment;
+    private readonly string _productImagesPath;
 
-    public ArticlesController(ApplicationDbContext db, IWebHostEnvironment environment)
+    public ArticlesController(
+        ApplicationDbContext db,
+        IWebHostEnvironment environment,
+        IConfiguration configuration)
     {
         _db = db;
-        _environment = environment;
+        var configuredPath = configuration["Storage:ProductImagesPath"];
+        _productImagesPath = string.IsNullOrWhiteSpace(configuredPath)
+            ? Path.Combine(environment.WebRootPath, "imagenes", "products")
+            : Path.GetFullPath(configuredPath);
     }
 
     public IActionResult Index()
@@ -58,7 +64,13 @@ public class ArticlesController : Controller
 
         ValidatePrices(input);
         ValidateImage(image);
-
+        BusinessInput.Money(ModelState, nameof(input.SalePrice), input.SalePrice, true);
+        BusinessInput.Money(ModelState, nameof(input.PurchasePrice), input.PurchasePrice, true);
+        if (product is not null)
+        {
+            if (input.Version != product.Version) return Conflict();
+            _db.Entry(product).Property(p => p.Version).OriginalValue = input.Version;
+        }
         if (!ModelState.IsValid)
         {
             input.ImageUrl = product?.ImageUrl;
@@ -246,12 +258,11 @@ public class ArticlesController : Controller
 
     private async Task<string> SaveImageAsync(IFormFile image)
     {
-        var imageDirectory = Path.Combine(_environment.WebRootPath, "imagenes", "products");
-        Directory.CreateDirectory(imageDirectory);
+        Directory.CreateDirectory(_productImagesPath);
 
         var extension = Path.GetExtension(image.FileName).ToLowerInvariant();
         var fileName = $"{Guid.NewGuid():N}{extension}";
-        var filePath = Path.Combine(imageDirectory, fileName);
+        var filePath = Path.Combine(_productImagesPath, fileName);
 
         await using var stream = System.IO.File.Create(filePath);
         await image.CopyToAsync(stream);
@@ -266,10 +277,9 @@ public class ArticlesController : Controller
             return;
         }
 
-        var relativePath = imageUrl
-            .TrimStart('/')
-            .Replace('/', Path.DirectorySeparatorChar);
-        var filePath = Path.Combine(_environment.WebRootPath, relativePath);
+        var fileName = Path.GetFileName(imageUrl);
+        if (string.IsNullOrWhiteSpace(fileName)) return;
+        var filePath = Path.Combine(_productImagesPath, fileName);
 
         if (System.IO.File.Exists(filePath))
         {

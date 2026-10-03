@@ -93,7 +93,7 @@ public class LoginModel : PageModel
             user.UserName!,
             Input.Password,
             Input.RememberMe,
-            lockoutOnFailure: false);
+            lockoutOnFailure: true);
 
         if (result.Succeeded)
         {

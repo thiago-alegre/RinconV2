@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Rincon.DataAccess.Data;
 using Rincon.Models.ViewModels;
 using Rincon.Utilities;
+using Rincon.Infrastructure;
 using Rincon.Utilities.Enums;
 
 namespace Rincon.Areas.Employee.Controllers;
@@ -20,17 +21,31 @@ public class BalanceController : Controller
         var from = (dateFrom ?? DateTime.Today.AddMonths(-1)).Date;
         var to = (dateTo ?? DateTime.Today).Date;
         if (to < from) (from, to) = (to, from);
-        var end = to.AddDays(1);
+        var end = BusinessInput.ExclusiveEnd(to);
 
-        var salesByPaymentMethod = await _db.DirectSales.AsNoTracking()
-            .Where(s => !s.IsVoided && s.Date >= from && s.Date < end && s.PaymentMethod != PaymentMethod.CuentaPersonal)
-            .GroupBy(sale => sale.PaymentMethod)
+        var salesTotals = await _db.DirectSales
+            .AsNoTracking()
+            .Where(sale =>
+                sale.Date >= from &&
+                sale.Date < end &&
+                sale.PaymentMethod != PaymentMethod.CuentaPersonal)
+            .GroupBy(_ => 1)
             .Select(group => new
             {
-                PaymentMethod = group.Key,
-                Total = group.Sum(sale => sale.Total)
+                Cash = group.Sum(sale =>
+                    sale.PaymentMethod == PaymentMethod.Efectivo
+                        ? sale.Total
+                        : sale.PaymentMethod == PaymentMethod.Combinado
+                            ? sale.CashAmount
+                            : 0),
+                Transfer = group.Sum(sale =>
+                    sale.PaymentMethod == PaymentMethod.Transferencia
+                        ? sale.Total
+                        : sale.PaymentMethod == PaymentMethod.Combinado
+                            ? sale.TransferAmount
+                            : 0)
             })
-            .ToDictionaryAsync(item => item.PaymentMethod, item => item.Total);
+            .FirstOrDefaultAsync();
         var collectionsByPaymentMethod = await _db.PersonalAccountPayments.AsNoTracking()
             .Where(p => p.Date >= from && p.Date < end)
             .GroupBy(payment => payment.PaymentMethod)
@@ -40,11 +55,27 @@ public class BalanceController : Controller
                 Total = group.Sum(payment => payment.Amount)
             })
             .ToDictionaryAsync(item => item.PaymentMethod, item => item.Total);
-        var accountSales = await _db.DirectSales.AsNoTracking()
-            .Where(s => !s.IsVoided && s.PaymentMethod == PaymentMethod.CuentaPersonal)
-            .SumAsync(s => (decimal?) s.Total) ?? 0;
-        var allCollections = await _db.PersonalAccountPayments.AsNoTracking().SumAsync(p => (decimal?) p.Amount) ?? 0;
-        var outstanding = Math.Max(0, accountSales - allCollections);
+        var returnTotals = await _db.DirectSaleReturns.AsNoTracking()
+            .Where(item => item.Date >= from && item.Date < end)
+            .GroupBy(_ => 1)
+            .Select(group => new
+            {
+                Cash = group.Sum(item =>
+                    item.DirectSale.PaymentMethod == PaymentMethod.Efectivo
+                        ? item.Total
+                        : item.DirectSale.PaymentMethod == PaymentMethod.Combinado && item.DirectSale.Total > 0
+                            ? item.Total * item.DirectSale.CashAmount / item.DirectSale.Total
+                            : 0),
+                Transfer = group.Sum(item =>
+                    item.DirectSale.PaymentMethod == PaymentMethod.Transferencia
+                        ? item.Total
+                        : item.DirectSale.PaymentMethod == PaymentMethod.Combinado && item.DirectSale.Total > 0
+                            ? item.Total * item.DirectSale.TransferAmount / item.DirectSale.Total
+                            : 0)
+            })
+            .FirstOrDefaultAsync();
+        var accountBalances = AccountLedger.Accounts(_db);
+        var outstanding = await accountBalances.SumAsync(a => a.DebtValue);
         var expensesQuery = _db.Expenses
             .AsNoTracking()
             .Where(expense =>
@@ -72,15 +103,24 @@ public class BalanceController : Controller
             .Take(3)
             .ToListAsync();
         var estimatedProfit = await _db.DirectSales.AsNoTracking()
-            .Where(s => !s.IsVoided && s.Date >= from && s.Date < end)
+            .Where(s => s.Date >= from && s.Date < end)
             .SumAsync(s => (decimal?) (s.Total - s.TotalCost)) ?? 0;
-        var regularSales = salesByPaymentMethod.Values.Sum();
+        var returnedProfit = await _db.DirectSaleReturns.AsNoTracking()
+            .Where(item => item.Date >= from && item.Date < end)
+            .SumAsync(item => (decimal?) (item.Total - item.TotalCost)) ?? 0;
+        var cashSales = salesTotals?.Cash ?? 0;
+        var transferSales = salesTotals?.Transfer ?? 0;
+        var cashReturns = returnTotals?.Cash ?? 0;
+        var transferReturns = returnTotals?.Transfer ?? 0;
+        var regularSales = cashSales + transferSales - cashReturns - transferReturns;
         var accountCollections = collectionsByPaymentMethod.Values.Sum();
-        var availableCash = salesByPaymentMethod.GetValueOrDefault(PaymentMethod.Efectivo)
+        var availableCash = cashSales
             + collectionsByPaymentMethod.GetValueOrDefault(PaymentMethod.Efectivo)
+            - cashReturns
             - expensesByPaymentMethod.GetValueOrDefault(PaymentMethod.Efectivo);
-        var availableTransfer = salesByPaymentMethod.GetValueOrDefault(PaymentMethod.Transferencia)
+        var availableTransfer = transferSales
             + collectionsByPaymentMethod.GetValueOrDefault(PaymentMethod.Transferencia)
+            - transferReturns
             - expensesByPaymentMethod.GetValueOrDefault(PaymentMethod.Transferencia);
 
         return View(new BalanceVM
@@ -95,7 +135,7 @@ public class BalanceController : Controller
             PersonalWithdrawals = expenseTotals.GetValueOrDefault(ExpenseType.RetiroPersonal),
             AvailableCash = availableCash,
             AvailableTransfer = availableTransfer,
-            EstimatedProfit = estimatedProfit,
+            EstimatedProfit = estimatedProfit - returnedProfit,
             RecentExpenses = recentExpenses
         });
     }
