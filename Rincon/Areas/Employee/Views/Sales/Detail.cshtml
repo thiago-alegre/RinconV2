@@ -86,7 +86,7 @@
                     <ul class="mb-2">
                         @foreach (var item in saleReturn.Items)
                         {
-                            <li>@item.ProductName × @DisplayFormatting.Quantity(item.Quantity) @(item.ReturnsToStock ? "· repuesto en stock" : "· no vuelve al stock")</li>
+                            <li>@item.ProductName × @DisplayFormatting.Quantity(item.Quantity) @(item.ProductId.HasValue ? (item.ReturnsToStock ? "· repuesto en stock" : "· no vuelve al stock") : "· producto suelto")</li>
                         }
                     </ul>
                 </div>
@@ -145,7 +145,7 @@
                             <td class="text-end">@DisplayFormatting.Quantity(item.Quantity)</td>
                             <td class="text-end">@DisplayFormatting.Quantity(item.ReturnItems.Sum(value => value.Quantity))</td>
                             <td class="text-end">@item.UnitPrice.ToString("C")</td>
-                            <td class="text-end">@item.UnitCost.ToString("C")</td>
+                            <td class="text-end">@(item.ProductId.HasValue ? item.UnitCost.ToString("C") : "No registrado")</td>
                             <td class="text-end fw-bold">@item.Subtotal.ToString("C")</td>
                         </tr>
                     }

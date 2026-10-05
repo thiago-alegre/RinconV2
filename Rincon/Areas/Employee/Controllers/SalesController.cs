@@ -218,8 +218,12 @@ public class SalesController : Controller
         BusinessInput.Money(ModelState, nameof(vm.CashAmount), vm.CashAmount);
         BusinessInput.Money(ModelState, nameof(vm.TransferAmount), vm.TransferAmount);
         vm.Lines = vm.Lines
-            .Where(line => line.ProductId > 0 || line.Quantity != 1)
+            .Where(line => line.IsLoose || line.ProductId.HasValue || line.Quantity != 1 ||
+                !string.IsNullOrWhiteSpace(line.LooseName) || line.LooseUnitPrice != 0)
             .ToList();
+
+        if (vm.Lines.Count > 100)
+            return BadRequest();
 
         if (!vm.Lines.Any())
         {
@@ -246,14 +250,17 @@ public class SalesController : Controller
 
         await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         var productIds = vm.Lines
-            .Select(line => line.ProductId)
+            .Where(line => !line.IsLoose && line.ProductId.HasValue)
+            .Select(line => line.ProductId!.Value)
             .Distinct()
             .ToList();
         var products = await _db.Products
             .Where(product => productIds.Contains(product.Id) && product.IsActive)
             .ToDictionaryAsync(product => product.Id);
 
-        foreach (var group in vm.Lines.Where(line => line.ProductId > 0).GroupBy(line => line.ProductId))
+        foreach (var group in vm.Lines
+            .Where(line => !line.IsLoose && line.ProductId.HasValue)
+            .GroupBy(line => line.ProductId!.Value))
         {
             if (products.TryGetValue(group.Key, out var product) && group.Sum(line => (long)line.Quantity) > product.Quantity)
             {
@@ -263,17 +270,33 @@ public class SalesController : Controller
 
         foreach (var line in vm.Lines)
         {
-            if (!products.ContainsKey(line.ProductId) || line.Quantity <= 0)
+            if (line.Quantity <= 0)
             {
-                ModelState.AddModelError(
-                    string.Empty,
-                    "Revise los productos y cantidades ingresados");
+                ModelState.AddModelError(string.Empty, "Revise las cantidades ingresadas");
+                continue;
+            }
+
+            if (line.IsLoose)
+            {
+                line.LooseName = line.LooseName?.Trim();
+                if (string.IsNullOrWhiteSpace(line.LooseName))
+                    ModelState.AddModelError(string.Empty, "Ingresá una descripción para cada producto suelto");
+                if (line.LooseUnitPrice <= 0)
+                    ModelState.AddModelError(string.Empty, "Ingresá un precio mayor a cero para cada producto suelto");
+                BusinessInput.Money(ModelState, "Precio del producto suelto", line.LooseUnitPrice, true);
+            }
+            else if (!line.ProductId.HasValue || !products.ContainsKey(line.ProductId.Value))
+            {
+                ModelState.AddModelError(string.Empty, "Revise los productos ingresados");
             }
         }
 
-        var total = vm.Lines
-            .Where(line => products.ContainsKey(line.ProductId) && line.Quantity > 0)
-            .Sum(line => products[line.ProductId].SalePrice * line.Quantity);
+        var total = vm.Lines.Where(line => line.Quantity > 0).Sum(line =>
+            line.IsLoose
+                ? line.LooseUnitPrice * line.Quantity
+                : line.ProductId.HasValue && products.TryGetValue(line.ProductId.Value, out var product)
+                    ? product.SalePrice * line.Quantity
+                    : 0);
 
         BusinessInput.Money(ModelState, "Total", total, true);
 
@@ -323,7 +346,23 @@ public class SalesController : Controller
 
         foreach (var line in vm.Lines)
         {
-            var product = products[line.ProductId];
+            if (line.IsLoose)
+            {
+                var looseItem = new DirectSaleItem
+                {
+                    ProductId = null,
+                    ProductName = line.LooseName!,
+                    Quantity = line.Quantity,
+                    UnitPrice = line.LooseUnitPrice,
+                    UnitCost = 0,
+                    Subtotal = line.LooseUnitPrice * line.Quantity
+                };
+                sale.Items.Add(looseItem);
+                sale.Total += looseItem.Subtotal;
+                continue;
+            }
+
+            var product = products[line.ProductId!.Value];
             var item = new DirectSaleItem
             {
                 ProductId = product.Id,
@@ -376,7 +415,9 @@ public class SalesController : Controller
                 ProductName = item.ProductName,
                 SoldQuantity = item.Quantity,
                 ReturnedQuantity = item.ReturnItems.Sum(returnItem => returnItem.Quantity),
-                UnitPrice = item.UnitPrice
+                UnitPrice = item.UnitPrice,
+                IsLoose = !item.ProductId.HasValue,
+                ReturnsToStock = item.ProductId.HasValue
             }).ToList()
         };
 
@@ -455,6 +496,8 @@ public class SalesController : Controller
         };
         var productIds = requested.Where(item => item.ReturnsToStock)
             .Select(item => sale.Items.First(value => value.Id == item.DirectSaleItemId).ProductId)
+            .Where(id => id.HasValue)
+            .Select(id => id!.Value)
             .Distinct().ToList();
         var products = await _db.Products.Where(item => productIds.Contains(item.Id)).ToDictionaryAsync(item => item.Id);
 
@@ -470,12 +513,13 @@ public class SalesController : Controller
                 UnitPrice = item.UnitPrice,
                 UnitCost = item.UnitCost,
                 Subtotal = item.UnitPrice * line.Quantity,
-                ReturnsToStock = line.ReturnsToStock
+                ReturnsToStock = line.ReturnsToStock && item.ProductId.HasValue
             };
             saleReturn.Items.Add(returnItem);
             saleReturn.Total += returnItem.Subtotal;
             saleReturn.TotalCost += returnItem.UnitCost * returnItem.Quantity;
-            if (line.ReturnsToStock && products.TryGetValue(item.ProductId, out var product))
+            if (returnItem.ReturnsToStock && item.ProductId.HasValue &&
+                products.TryGetValue(item.ProductId.Value, out var product))
             {
                 product.Quantity = checked(product.Quantity + Decimal.ToInt32(line.Quantity));
             }
@@ -509,9 +553,11 @@ public class SalesController : Controller
             SoldQuantity = item.Quantity,
             ReturnedQuantity = item.ReturnItems.Sum(value => value.Quantity),
             UnitPrice = item.UnitPrice,
+            IsLoose = !item.ProductId.HasValue,
             Selected = requested.GetValueOrDefault(item.Id)?.Selected ?? false,
             Quantity = requested.GetValueOrDefault(item.Id)?.Quantity ?? 0,
-            ReturnsToStock = requested.GetValueOrDefault(item.Id)?.ReturnsToStock ?? true
+            ReturnsToStock = item.ProductId.HasValue &&
+                (requested.GetValueOrDefault(item.Id)?.ReturnsToStock ?? true)
         }).ToList();
         return Task.CompletedTask;
     }

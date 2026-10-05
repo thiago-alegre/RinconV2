@@ -94,7 +94,7 @@
                 </div>
 
                 <div class="sale-lines-header" aria-hidden="true">
-                    <span>Producto</span>
+                    <span>Producto o descripción</span>
                     <span>Cantidad</span>
                     <span></span>
                 </div>
@@ -102,24 +102,51 @@
                 <div id="lines">
                     @for (var index = 0; index < Model.Lines.Count; index++)
                     {
-                        <div class="sale-line">
-                            <div class="sale-product-field">
-                                <select name="Lines[@index].ProductId" class="form-select product product-search" style="width: 100%;">
-                                    <option value="">Seleccione un producto...</option>
-                                    @foreach (var product in Model.Products)
-                                    {
-                                        <option value="@product.Id"
-                                                data-price="@product.SalePrice.ToString(System.Globalization.CultureInfo.InvariantCulture)"
-                                                selected="@(Model.Lines[index].ProductId == product.Id ? "selected" : null)">
-                                            @product.Name — @product.SalePrice.ToString("C") · Stock @product.Quantity
-                                        </option>
-                                    }
-                                </select>
-                            </div>
+                        var line = Model.Lines[index];
+                        <div class="sale-line @(line.IsLoose ? "sale-line-loose" : "sale-line-registered")">
+                            <input name="Lines[@index].IsLoose" type="hidden" value="@(line.IsLoose ? "true" : "false")" class="line-is-loose" />
+                            @if (line.IsLoose)
+                            {
+                                <div class="sale-product-field">
+                                    <input name="Lines[@index].LooseName"
+                                           value="@line.LooseName"
+                                           maxlength="200"
+                                           autocomplete="off"
+                                           class="form-control loose-name"
+                                           aria-label="Descripción del producto suelto"
+                                           placeholder="Descripción, por ejemplo: Chicle" />
+                                </div>
+                                <div class="sale-price-field">
+                                    <input name="Lines[@index].LooseUnitPrice"
+                                           value="@(line.LooseUnitPrice == 0 ? string.Empty : line.LooseUnitPrice.ToString("0.##", System.Globalization.CultureInfo.CurrentCulture))"
+                                           type="text"
+                                           inputmode="decimal"
+                                           autocomplete="off"
+                                           class="form-control loose-price"
+                                           aria-label="Precio unitario"
+                                           placeholder="Precio" />
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="sale-product-field">
+                                    <select name="Lines[@index].ProductId" class="form-select product product-search" style="width: 100%;">
+                                        <option value="">Seleccione un producto...</option>
+                                        @foreach (var product in Model.Products)
+                                        {
+                                            <option value="@product.Id"
+                                                    data-price="@product.SalePrice.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                                                    selected="@(line.ProductId == product.Id ? "selected" : null)">
+                                                @product.Name — @product.SalePrice.ToString("C") · Stock @product.Quantity
+                                            </option>
+                                        }
+                                    </select>
+                                </div>
+                            }
 
                             <div class="sale-quantity-field">
                                 <input name="Lines[@index].Quantity"
-                                       value="@Model.Lines[index].Quantity"
+                                       value="@line.Quantity"
                                        type="number"
                                        min="1"
                                        step="1"
@@ -137,9 +164,36 @@
                     }
                 </div>
 
-                <button type="button" id="addLine" class="btn btn-outline-primary sale-add-button">
-                    <i class="bi bi-plus"></i> Agregar producto
-                </button>
+                <div class="d-flex flex-wrap gap-2">
+                    <button type="button" id="addLine" class="btn btn-outline-primary sale-add-button">
+                        <i class="bi bi-plus"></i> Agregar producto
+                    </button>
+                    <button type="button" id="addLooseLine" class="btn btn-outline-primary sale-add-button">
+                        <i class="bi bi-plus-circle"></i> Agregar suelto
+                    </button>
+                </div>
+
+                <template id="looseLineTemplate">
+                    <div class="sale-line sale-line-loose">
+                        <input name="Lines[__index__].IsLoose" type="hidden" value="true" class="line-is-loose" />
+                        <div class="sale-product-field">
+                            <input name="Lines[__index__].LooseName" maxlength="200" autocomplete="off"
+                                   class="form-control loose-name" aria-label="Descripción del producto suelto"
+                                   placeholder="Descripción, por ejemplo: Chicle" />
+                        </div>
+                        <div class="sale-price-field">
+                            <input name="Lines[__index__].LooseUnitPrice" type="text" inputmode="decimal" autocomplete="off"
+                                   class="form-control loose-price" aria-label="Precio unitario" placeholder="Precio" />
+                        </div>
+                        <div class="sale-quantity-field">
+                            <input name="Lines[__index__].Quantity" value="1" type="number" min="1" step="1"
+                                   inputmode="numeric" aria-label="Cantidad" class="form-control quantity" />
+                        </div>
+                        <div class="sale-remove-action">
+                            <button type="button" class="btn btn-outline-danger remove sale-remove-button">Quitar</button>
+                        </div>
+                    </div>
+                </template>
 
                 <div class="sale-total-row">
                     <strong>Total estimado</strong>

@@ -3,6 +3,8 @@
 
     const linesContainer = document.getElementById("lines");
     const addLineButton = document.getElementById("addLine");
+    const addLooseLineButton = document.getElementById("addLooseLine");
+    const looseLineTemplate = document.getElementById("looseLineTemplate");
     const totalElement = document.getElementById("total");
     const saleForm = document.querySelector(".sale-create-form");
     const paymentSelect = document.getElementById("payment");
@@ -82,9 +84,12 @@
         let total = 0;
 
         linesContainer.querySelectorAll(".sale-line").forEach(line => {
-            const product = line.querySelector(".product");
             const quantity = line.querySelector(".quantity");
-            const price = Number(product?.selectedOptions[0]?.dataset.price ?? 0);
+            const product = line.querySelector(".product");
+            const loosePrice = line.querySelector(".loose-price");
+            const price = loosePrice
+                ? parseMoney(loosePrice.value)
+                : Number(product?.selectedOptions[0]?.dataset.price ?? 0);
             const units = Number(quantity?.value ?? 0);
 
             if (Number.isFinite(price) && Number.isFinite(units)) {
@@ -104,6 +109,22 @@
         );
 
         return isValid;
+    }
+
+    function validateLooseLine(line) {
+        const name = line.querySelector(".loose-name");
+        const price = line.querySelector(".loose-price");
+
+        if (!name || !price) {
+            return true;
+        }
+
+        const validName = name.value.trim().length > 0;
+        const amount = parseMoney(price.value);
+        const validPrice = Number.isFinite(amount) && amount > 0;
+        name.setCustomValidity(validName ? "" : "Ingresá una descripción para el producto suelto.");
+        price.setCustomValidity(validPrice ? "" : "Ingresá un precio mayor a cero.");
+        return validName && validPrice;
     }
 
     function validateCombinedPayment(total) {
@@ -208,15 +229,25 @@
 
     function renumberLines() {
         linesContainer.querySelectorAll(".sale-line").forEach((line, index) => {
-            line.querySelector(".product").name = `Lines[${index}].ProductId`;
-            line.querySelector(".quantity").name = `Lines[${index}].Quantity`;
+            const fields = {
+                ".line-is-loose": "IsLoose",
+                ".product": "ProductId",
+                ".loose-name": "LooseName",
+                ".loose-price": "LooseUnitPrice",
+                ".quantity": "Quantity"
+            };
+
+            Object.entries(fields).forEach(([selector, field]) => {
+                const input = line.querySelector(selector);
+                if (input) input.name = `Lines[${index}].${field}`;
+            });
         });
 
         updateTotal();
     }
 
     addLineButton.addEventListener("click", () => {
-        const sourceLine = linesContainer.querySelector(".sale-line");
+        const sourceLine = linesContainer.querySelector(".sale-line-registered");
 
         if (!sourceLine) {
             return;
@@ -232,6 +263,21 @@
         renumberLines();
     });
 
+    addLooseLineButton?.addEventListener("click", () => {
+        if (!looseLineTemplate) {
+            return;
+        }
+
+        const index = linesContainer.querySelectorAll(".sale-line").length;
+        const wrapper = document.createElement("div");
+        wrapper.innerHTML = looseLineTemplate.innerHTML.replaceAll("__index__", String(index)).trim();
+        const newLine = wrapper.firstElementChild;
+        linesContainer.appendChild(newLine);
+        validateQuantity(newLine.querySelector(".quantity"));
+        renumberLines();
+        newLine.querySelector(".loose-name")?.focus();
+    });
+
     linesContainer.addEventListener("click", event => {
         const removeButton = event.target.closest(".remove");
 
@@ -240,9 +286,19 @@
         }
 
         const line = removeButton.closest(".sale-line");
-        const productSelect = $(line.querySelector(".product"));
+        if (line.classList.contains("sale-line-registered") &&
+            linesContainer.querySelectorAll(".sale-line-registered").length <= 1) {
+            const product = $(line.querySelector(".product"));
+            product.val("").trigger("change");
+            line.querySelector(".quantity").value = "1";
+            updateTotal();
+            return;
+        }
 
-        if (productSelect.hasClass("select2-hidden-accessible")) {
+        const productElement = line.querySelector(".product");
+        const productSelect = productElement ? $(productElement) : null;
+
+        if (productSelect?.hasClass("select2-hidden-accessible")) {
             productSelect.select2("destroy");
         }
 
@@ -254,6 +310,9 @@
         if (event.target.classList.contains("quantity")) {
             validateQuantity(event.target);
         }
+
+        const looseLine = event.target.closest(".sale-line-loose");
+        if (looseLine) validateLooseLine(looseLine);
 
         updateTotal();
     });
@@ -279,13 +338,17 @@
         updateTotal();
     });
     saleForm?.addEventListener("submit", event => {
-        if (!usesCombinedPayment()) {
-            return;
+        const quantitiesValid = [...linesContainer.querySelectorAll(".quantity")]
+            .every(validateQuantity);
+        const looseLinesValid = [...linesContainer.querySelectorAll(".sale-line-loose")]
+            .every(validateLooseLine);
+        let paymentValid = true;
+        if (usesCombinedPayment()) {
+            combinedPaymentTouched = true;
+            paymentValid = validateCombinedPayment(getSaleTotal());
         }
 
-        combinedPaymentTouched = true;
-
-        if (!validateCombinedPayment(getSaleTotal())) {
+        if (!quantitiesValid || !looseLinesValid || !paymentValid) {
             event.preventDefault();
             saleForm.reportValidity();
         }

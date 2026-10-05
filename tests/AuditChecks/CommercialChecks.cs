@@ -53,6 +53,41 @@ static class CommercialChecks
         db.AddRange(account, shirt, blanket);
         await db.SaveChangesAsync();
 
+        var productsBeforeLooseSale = await db.Products.CountAsync();
+        var shirtStockBeforeLooseSale = shirt.Quantity;
+        var looseSaleForm = await Form("/Employee/Sales/Create");
+        looseSaleForm["PaymentMethod"] = "1";
+        looseSaleForm["Lines[0].IsLoose"] = "true";
+        looseSaleForm["Lines[0].LooseName"] = "Chicle suelto";
+        looseSaleForm["Lines[0].LooseUnitPrice"] = "25,50";
+        looseSaleForm["Lines[0].Quantity"] = "2";
+        check((await Post("/Employee/Sales/Create", looseSaleForm)).StatusCode == HttpStatusCode.Redirect,
+            "loose product sale is registered");
+        var looseOperationId = Guid.Parse(looseSaleForm["OperationId"]);
+        var looseSale = await db.DirectSales.AsNoTracking().Include(item => item.Items)
+            .SingleAsync(item => item.OperationId == looseOperationId);
+        var looseItem = looseSale.Items.Single();
+        check(looseItem.ProductId is null && looseItem.ProductName == "Chicle suelto" &&
+              looseItem.UnitPrice == 25.50m && looseItem.Quantity == 2 && looseSale.Total == 51m,
+            "loose line preserves description price and quantity");
+        await db.Entry(shirt).ReloadAsync();
+        check(await db.Products.CountAsync() == productsBeforeLooseSale && shirt.Quantity == shirtStockBeforeLooseSale,
+            "loose product neither creates a product nor changes stock");
+
+        var looseVoidForm = await Form("/Employee/Sales/Void/" + looseSale.Id);
+        looseVoidForm["SaleId"] = looseSale.Id.ToString();
+        looseVoidForm["Lines[0].DirectSaleItemId"] = looseItem.Id.ToString();
+        looseVoidForm["Lines[0].Selected"] = "true";
+        looseVoidForm["Lines[0].Quantity"] = "2";
+        looseVoidForm["Lines[0].ReturnsToStock"] = "true";
+        check((await Post("/Employee/Sales/Void", looseVoidForm)).StatusCode == HttpStatusCode.Redirect,
+            "loose product can be cancelled");
+        var looseReturnOperationId = Guid.Parse(looseVoidForm["OperationId"]);
+        var looseReturn = await db.DirectSaleReturns.AsNoTracking().Include(item => item.Items)
+            .SingleAsync(item => item.OperationId == looseReturnOperationId);
+        check(!looseReturn.Items.Single().ReturnsToStock,
+            "loose product cancellation can never return stock");
+
         var saleForm = await Form("/Employee/Sales/Create");
         saleForm["PaymentMethod"] = "3";
         saleForm["PersonalAccountId"] = account.Id.ToString();
@@ -68,6 +103,12 @@ static class CommercialChecks
             .SingleAsync(item => item.OperationId == operationId);
         var shirtLine = sale.Items.Single(item => item.ProductId == shirt.Id);
         var blanketLine = sale.Items.Single(item => item.ProductId == blanket.Id);
+
+        var accountProductsBeforeCancellation = await client.GetStringAsync(
+            "/Employee/Accounts/GetSaleDetails?id=" + account.Id);
+        check(accountProductsBeforeCancellation.Contains($"\"saleId\":{sale.Id}") &&
+              accountProductsBeforeCancellation.Contains("\"canCancel\":true"),
+            "account products expose their cancellable sale action");
 
         var paymentForm = await Form("/Employee/Accounts/Detail/" + account.Id);
         paymentForm["Id"] = account.Id.ToString();
@@ -125,5 +166,10 @@ static class CommercialChecks
             "account history exposes cancellation movements");
         var salesHistory = await client.GetStringAsync("/Employee/Sales/GetAll?status=voided");
         check(salesHistory.Contains("Anulada"), "fully cancelled sale appears as cancelled");
+        var accountProductsAfterCancellation = await client.GetStringAsync(
+            "/Employee/Accounts/GetSaleDetails?id=" + account.Id);
+        check(accountProductsAfterCancellation.Contains($"\"saleId\":{sale.Id}") &&
+              accountProductsAfterCancellation.Contains("\"canCancel\":false"),
+            "account products disable cancellation after the whole sale is cancelled");
     }
 }

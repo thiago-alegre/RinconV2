@@ -327,7 +327,8 @@ public class AccountsController : Controller
                 item.UnitPrice,
                 item.Subtotal,
                 ReturnedQuantity = item.ReturnItems.Sum(value => value.Quantity),
-                ReturnedTotal = item.ReturnItems.Sum(value => value.Subtotal)
+                ReturnedTotal = item.ReturnItems.Sum(value => value.Subtotal),
+                CanCancel = (item.DirectSale.Returns.Sum(value => (decimal?)value.Total) ?? 0m) < item.DirectSale.Total
             })
             .ToListAsync();
 
@@ -350,7 +351,9 @@ public class AccountsController : Controller
                 item.UnitPrice,
                 subtotal = item.Subtotal - item.ReturnedTotal,
                 status = status.Text,
-                statusClass = status.ClassName
+                statusClass = status.ClassName,
+                saleId = item.DirectSaleId,
+                canCancel = item.CanCancel
             };
         });
 

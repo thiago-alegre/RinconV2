@@ -38,7 +38,7 @@ public class DirectSaleReturnItem
     public DirectSaleReturn DirectSaleReturn { get; set; } = null!;
     public int DirectSaleItemId { get; set; }
     public DirectSaleItem DirectSaleItem { get; set; } = null!;
-    public int ProductId { get; set; }
+    public int? ProductId { get; set; }
     public Product? Product { get; set; }
     public string ProductName { get; set; } = string.Empty;
 

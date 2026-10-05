@@ -47,15 +47,24 @@ public class DirectSaleVoidLineVM
     public decimal ReturnedQuantity { get; set; }
     public decimal Quantity { get; set; }
     public decimal UnitPrice { get; set; }
+    public bool IsLoose { get; set; }
     public bool ReturnsToStock { get; set; } = true;
     public decimal AvailableQuantity => SoldQuantity - ReturnedQuantity;
 }
 
 public class DirectSaleLineVM
 {
-    [Range(1, int.MaxValue, ErrorMessage = "Seleccione un producto")]
     [Display(Name = "Producto")]
-    public int ProductId { get; set; }
+    public int? ProductId { get; set; }
+
+    public bool IsLoose { get; set; }
+
+    [StringLength(200, ErrorMessage = "La descripción no puede superar los 200 caracteres")]
+    [Display(Name = "Descripción")]
+    public string? LooseName { get; set; }
+
+    [Display(Name = "Precio unitario")]
+    public decimal LooseUnitPrice { get; set; }
 
     [Range(1, int.MaxValue, ErrorMessage = "La cantidad debe ser un número entero mayor a cero")]
     [Display(Name = "Cantidad")]

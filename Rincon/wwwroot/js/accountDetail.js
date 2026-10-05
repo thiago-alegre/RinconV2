@@ -27,6 +27,23 @@ $(function () {
                 orderable: false,
                 render: (status, type, row) =>
                     `<span class="status-badge ${row.statusClass}">${status}</span>`
+            },
+            {
+                data: null,
+                orderable: false,
+                searchable: false,
+                render: (_value, type, row) => {
+                    if (type !== "display") return "";
+
+                    const saleId = Number(row.saleId);
+                    if (!row.canCancel || !Number.isInteger(saleId) || saleId <= 0) {
+                        return '<span class="text-muted">Sin acciones</span>';
+                    }
+
+                    return `<a class="btn btn-outline-danger btn-sm" href="/Employee/Sales/Void/${saleId}" aria-label="Anular productos de la venta ${saleId}">
+                        <i class="fa fa-ban me-1" aria-hidden="true"></i>Anular
+                    </a>`;
+                }
             }
         ]
     });

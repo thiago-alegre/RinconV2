@@ -34,7 +34,7 @@ public class DirectSaleItem
     public int Id { get; set; }
     public int DirectSaleId { get; set; }
     public DirectSale DirectSale { get; set; } = null!;
-    public int ProductId { get; set; }
+    public int? ProductId { get; set; }
     public Product? Product { get; set; }
     public string ProductName { get; set; } = string.Empty;
     [Column(TypeName = "decimal(18,3)")]

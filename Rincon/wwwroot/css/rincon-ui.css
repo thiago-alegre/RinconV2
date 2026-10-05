@@ -2127,6 +2127,10 @@ table.dataTable tbody td {
     align-items: center;
 }
 
+.sale-line-loose {
+    grid-template-columns: minmax(0, 1fr) 160px 120px 112px;
+}
+
 .sale-lines-header {
     margin-bottom: 8px;
     padding-inline: 2px;
@@ -2150,6 +2154,7 @@ table.dataTable tbody td {
 }
 
 .sale-product-field,
+.sale-price-field,
 .sale-quantity-field,
 .sale-remove-action {
     min-width: 0;
@@ -2252,6 +2257,10 @@ table.dataTable tbody td {
 
     .sale-line {
         grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .sale-line-loose {
+        grid-template-columns: minmax(0, 1fr) 120px;
     }
 
     .sale-product-field {

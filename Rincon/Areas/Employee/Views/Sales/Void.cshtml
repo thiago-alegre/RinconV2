@@ -96,11 +96,19 @@
                                        class="form-control void-line-quantity" disabled="@(!Model.Lines[index].Selected || available <= 0)" />
                             </td>
                             <td>
-                                <div class="form-check">
-                                    <input asp-for="Lines[index].ReturnsToStock"
-                                           class="form-check-input void-line-restock" disabled="@(!Model.Lines[index].Selected || available <= 0)" />
-                                    <label asp-for="Lines[index].ReturnsToStock" class="form-check-label">Sí</label>
-                                </div>
+                                @if (Model.Lines[index].IsLoose)
+                                {
+                                    <input asp-for="Lines[index].ReturnsToStock" type="hidden" value="false" class="void-line-restock" />
+                                    <span class="text-muted">No aplica</span>
+                                }
+                                else
+                                {
+                                    <div class="form-check">
+                                        <input asp-for="Lines[index].ReturnsToStock"
+                                               class="form-check-input void-line-restock" disabled="@(!Model.Lines[index].Selected || available <= 0)" />
+                                        <label asp-for="Lines[index].ReturnsToStock" class="form-check-label">Sí</label>
+                                    </div>
+                                }
                             </td>
                         </tr>
                     }
