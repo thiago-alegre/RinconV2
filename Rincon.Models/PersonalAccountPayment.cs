@@ -33,5 +33,21 @@ namespace Rincon.Models
 
         [ForeignKey("UserId")]
         public ApplicationUser? User { get; set; }
+
+        public bool IsVoided { get; set; }
+        public DateTime? VoidedAt { get; set; }
+
+        [MaxLength(500)]
+        public string? VoidReason { get; set; }
+
+        public string? VoidedByUserId { get; set; }
+
+        [ForeignKey(nameof(VoidedByUserId))]
+        public ApplicationUser? VoidedByUser { get; set; }
+
+        public int? ReplacesPaymentId { get; set; }
+
+        [ForeignKey(nameof(ReplacesPaymentId))]
+        public PersonalAccountPayment? ReplacesPayment { get; set; }
     }
 }

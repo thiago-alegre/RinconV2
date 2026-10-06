@@ -47,7 +47,7 @@ public class AccountsController : Controller
                 EF.Functions.ILike(account.DNI, search.Pattern) ||
                 (account.Phone != null && EF.Functions.ILike(account.Phone, search.Pattern)) ||
                 (account.Address != null && EF.Functions.ILike(account.Address, search.Pattern)) ||
-                (search.HasNumber && account.DebtValue == search.Number) ||
+                (search.HasNumber && (account.DebtValue == search.Number || account.CreditValue == search.Number)) ||
                 (date != null && account.DebtSinceValue.HasValue &&
                     account.DebtSinceValue.Value.Day == date.Day &&
                     account.DebtSinceValue.Value.Month == date.Month &&
@@ -73,9 +73,12 @@ public class AccountsController : Controller
                 ? query.OrderBy(account => account.DebtValue)
                 : query.OrderByDescending(account => account.DebtValue),
             4 => request.IsAscending
+                ? query.OrderBy(account => account.CreditValue)
+                : query.OrderByDescending(account => account.CreditValue),
+            5 => request.IsAscending
                 ? query.OrderBy(account => account.DebtSinceValue)
                 : query.OrderByDescending(account => account.DebtSinceValue),
-            5 => request.IsAscending
+            6 => request.IsAscending
                 ? query.OrderBy(account => account.isActive)
                 : query.OrderByDescending(account => account.isActive),
             _ => query.OrderBy(account => account.FullName)
@@ -99,6 +102,7 @@ public class AccountsController : Controller
                 account.Phone,
                 account.isActive,
                 debt = debt.Amount,
+                credit = debt.Credit,
                 debtSince = debt.Since?.ToString("dd/MM/yyyy")
             };
         });
@@ -187,6 +191,7 @@ public class AccountsController : Controller
         {
             Account = account,
             CurrentDebt = summary.Amount,
+            CurrentCredit = summary.Credit,
             DebtSince = summary.Since
         });
     }
@@ -255,6 +260,142 @@ public class AccountsController : Controller
         await transaction.CommitAsync();
         TempData["success"] = "Pago registrado correctamente";
         return RedirectToAction(nameof(Detail), new { id = input.Id });
+    }
+
+    [HttpGet, Authorize(Roles = SD.Role_Admin)]
+    public async Task<IActionResult> EditPayment(int id)
+    {
+        var payment = await _db.PersonalAccountPayments.AsNoTracking()
+            .Include(item => item.PersonalAccount)
+            .FirstOrDefaultAsync(item => item.Id == id);
+
+        if (payment is null) return NotFound();
+        if (payment.IsVoided)
+        {
+            TempData["error"] = "El pago ya se encuentra anulado";
+            return RedirectToAction(nameof(Detail), new { id = payment.PersonalAccountId });
+        }
+
+        return View(new PersonalAccountPaymentChangeVM
+        {
+            PaymentId = payment.Id,
+            AccountId = payment.PersonalAccountId,
+            AccountName = payment.PersonalAccount?.FullName ?? "Cuenta personal",
+            OriginalAmount = payment.Amount,
+            OriginalDate = payment.Date,
+            AmountText = payment.Amount.ToString("0.00", System.Globalization.CultureInfo.CurrentCulture),
+            PaymentMethod = payment.PaymentMethod,
+            Notes = payment.Notes
+        });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = SD.Role_Admin)]
+    public async Task<IActionResult> EditPayment(PersonalAccountPaymentChangeVM input)
+    {
+        if (string.IsNullOrWhiteSpace(input.Reason) || input.Reason.Trim().Length > 500 || input.Notes?.Length > 500)
+        {
+            TempData["error"] = "Ingresá un motivo válido para modificar el pago";
+            return RedirectToAction(nameof(EditPayment), new { id = input.PaymentId });
+        }
+
+        if (!DecimalParser.TryParse(input.AmountText, out var amount) || amount <= 0 || !BusinessInput.IsMoney(amount))
+        {
+            TempData["error"] = "Ingresá un monto válido";
+            return RedirectToAction(nameof(EditPayment), new { id = input.PaymentId });
+        }
+
+        if (input.PaymentMethod is not PaymentMethod.Efectivo and not PaymentMethod.Transferencia)
+        {
+            TempData["error"] = "Seleccione efectivo o transferencia";
+            return RedirectToAction(nameof(EditPayment), new { id = input.PaymentId });
+        }
+
+        await using var transaction = await _db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+        var payment = await _db.PersonalAccountPayments
+            .FirstOrDefaultAsync(item => item.Id == input.PaymentId);
+        if (payment is null) return NotFound();
+        if (payment.IsVoided)
+        {
+            TempData["error"] = "El pago ya se encuentra anulado";
+            return RedirectToAction(nameof(Detail), new { id = payment.PersonalAccountId });
+        }
+
+        var summary = (await GetDebtSummariesAsync(new[] { payment.PersonalAccountId }))
+            .GetValueOrDefault(payment.PersonalAccountId, DebtSummary.Empty);
+        if (amount > summary.Amount + payment.Amount)
+        {
+            TempData["error"] = "El pago corregido no puede superar la deuda disponible";
+            return RedirectToAction(nameof(EditPayment), new { id = payment.Id });
+        }
+
+        var reason = input.Reason.Trim();
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        payment.IsVoided = true;
+        payment.VoidedAt = DateTime.Now;
+        payment.VoidReason = $"Modificado: {reason}";
+        payment.VoidedByUserId = userId;
+
+        _db.PersonalAccountPayments.Add(new PersonalAccountPayment
+        {
+            OperationId = Guid.NewGuid(),
+            PersonalAccountId = payment.PersonalAccountId,
+            Amount = amount,
+            PaymentMethod = input.PaymentMethod,
+            Notes = string.IsNullOrWhiteSpace(input.Notes) ? null : input.Notes.Trim(),
+            Date = payment.Date,
+            UserId = userId,
+            ReplacesPaymentId = payment.Id
+        });
+
+        await _db.SaveChangesAsync();
+        await transaction.CommitAsync();
+        TempData["success"] = "Pago modificado correctamente";
+        return RedirectToAction(nameof(Detail), new { id = payment.PersonalAccountId });
+    }
+
+    [HttpGet, Authorize(Roles = SD.Role_Admin)]
+    public async Task<IActionResult> VoidPayment(int id)
+    {
+        var payment = await _db.PersonalAccountPayments.AsNoTracking()
+            .Include(item => item.PersonalAccount)
+            .FirstOrDefaultAsync(item => item.Id == id);
+        if (payment is null) return NotFound();
+        if (payment.IsVoided)
+        {
+            TempData["error"] = "El pago ya se encuentra anulado";
+            return RedirectToAction(nameof(Detail), new { id = payment.PersonalAccountId });
+        }
+
+        return View(new PersonalAccountPaymentChangeVM
+        {
+            PaymentId = payment.Id,
+            AccountId = payment.PersonalAccountId,
+            AccountName = payment.PersonalAccount?.FullName ?? "Cuenta personal",
+            OriginalAmount = payment.Amount,
+            OriginalDate = payment.Date,
+            PaymentMethod = payment.PaymentMethod,
+            Notes = payment.Notes
+        });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken, Authorize(Roles = SD.Role_Admin)]
+    public async Task<IActionResult> VoidPayment(int paymentId, string reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason) || reason.Trim().Length > 500) return BadRequest();
+        await using var transaction = await _db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+        var payment = await _db.PersonalAccountPayments.FirstOrDefaultAsync(item => item.Id == paymentId);
+        if (payment is null) return NotFound();
+        if (!payment.IsVoided)
+        {
+            payment.IsVoided = true;
+            payment.VoidedAt = DateTime.Now;
+            payment.VoidReason = reason.Trim();
+            payment.VoidedByUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            await _db.SaveChangesAsync();
+        }
+        await transaction.CommitAsync();
+        TempData["success"] = "Pago anulado correctamente";
+        return RedirectToAction(nameof(Detail), new { id = payment.PersonalAccountId });
     }
 
     [HttpGet]
@@ -484,11 +625,16 @@ public class AccountsController : Controller
             .Take(request.Length)
             .Select(payment => new
             {
+                payment.Id,
                 payment.Date,
                 payment.PaymentMethod,
                 payment.Amount,
                 User = payment.User != null ? payment.User.FullName : null,
-                payment.Notes
+                payment.Notes,
+                payment.IsVoided,
+                payment.VoidReason,
+                VoidedBy = payment.VoidedByUser != null ? payment.VoidedByUser.FullName : null,
+                payment.ReplacesPaymentId
             })
             .ToListAsync();
 
@@ -500,7 +646,15 @@ public class AccountsController : Controller
                 : "Efectivo",
             payment.Amount,
             user = string.IsNullOrWhiteSpace(payment.User) ? "Sin usuario" : payment.User,
-            notes = string.IsNullOrWhiteSpace(payment.Notes) ? "-" : payment.Notes
+            notes = string.IsNullOrWhiteSpace(payment.Notes) ? "-" : payment.Notes,
+            status = payment.IsVoided ? "Anulado" : payment.ReplacesPaymentId.HasValue ? "Corregido" : "Vigente",
+            statusClass = payment.IsVoided ? "status-inactive" : "status-active",
+            payment.Id,
+            payment.IsVoided,
+            voidReason = payment.IsVoided
+                ? $"{payment.VoidReason ?? "Sin motivo"} · {payment.VoidedBy ?? "Sin usuario"}"
+                : null,
+            canManage = User.IsInRole(SD.Role_Admin) && !payment.IsVoided
         });
 
         return Json(new
@@ -516,7 +670,7 @@ public class AccountsController : Controller
     {
         var ids = accountIds.Distinct().ToList();
         return await AccountLedger.Accounts(_db).Where(a => ids.Contains(a.Id))
-            .ToDictionaryAsync(a => a.Id, a => new DebtSummary(a.DebtValue, a.DebtSinceValue));
+            .ToDictionaryAsync(a => a.Id, a => new DebtSummary(a.DebtValue, a.CreditValue, a.DebtSinceValue));
     }
 
     private async Task<Dictionary<int, SaleBalance>> GetSaleBalancesAsync(int accountId) =>
@@ -535,9 +689,9 @@ public class AccountsController : Controller
             : ("Pago parcial", "status-warning");
     }
 
-    private sealed record DebtSummary(decimal Amount, DateTime? Since)
+    private sealed record DebtSummary(decimal Amount, decimal Credit, DateTime? Since)
     {
-        public static DebtSummary Empty { get; } = new(0m, null);
+        public static DebtSummary Empty { get; } = new(0m, 0m, null);
     }
 
     private sealed record SaleBalance(decimal Total, decimal AmountPaid);

@@ -47,7 +47,7 @@ public class BalanceController : Controller
             })
             .FirstOrDefaultAsync();
         var collectionsByPaymentMethod = await _db.PersonalAccountPayments.AsNoTracking()
-            .Where(p => p.Date >= from && p.Date < end)
+            .Where(p => !p.IsVoided && p.Date >= from && p.Date < end)
             .GroupBy(payment => payment.PaymentMethod)
             .Select(group => new
             {

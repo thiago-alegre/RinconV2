@@ -33,7 +33,7 @@
                     <input asp-for="RefundMethod" type="hidden" />
                     @if (Model.IsAccountSale)
                     {
-                        <p class="form-control-plaintext mb-0">Se descuenta de la cuenta personal, sin generar saldo a favor.</p>
+                        <p class="form-control-plaintext mb-0">Se ajusta la cuenta personal. Si la compra ya estaba pagada, puede generar saldo a favor.</p>
                     }
                     else if (Model.RefundMethod == PaymentMethod.Transferencia)
                     {
@@ -66,9 +66,9 @@
                         <tr>
                             <th>Anular</th>
                             <th>Producto</th>
+                            <th>Precio</th>
                             <th>Vendido</th>
                             <th>Ya anulado</th>
-                            <th>Disponible</th>
                             <th style="width:140px">Cantidad</th>
                             <th>Devuelve al stock</th>
                         </tr>
@@ -86,9 +86,9 @@
                                 @Model.Lines[index].ProductName
                                 <input asp-for="Lines[index].DirectSaleItemId" type="hidden" />
                             </td>
+                            <td>@Model.Lines[index].UnitPrice.ToString("C")</td>
                             <td>@Model.Lines[index].SoldQuantity.ToString("N0")</td>
                             <td>@Model.Lines[index].ReturnedQuantity.ToString("N0")</td>
-                            <td>@available.ToString("N0")</td>
                             <td>
                                 <input asp-for="Lines[index].Quantity"
                                        asp-format="{0:0}"

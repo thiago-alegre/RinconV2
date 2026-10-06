@@ -1,0 +1,34 @@
+@model Rincon.Models.ViewModels.PersonalAccountPaymentChangeVM
+@{
+    ViewData["Title"] = "Anular pago";
+}
+
+<div class="admin-page py-4">
+    <div class="admin-hero admin-hero-toolbar mb-4">
+        <div>
+            <span class="admin-eyebrow">Cuenta personal</span>
+            <h1 class="admin-title h3 mb-1">Anular pago #@Model.PaymentId</h1>
+            <p class="admin-subtitle mb-0">@Model.AccountName · @Model.OriginalDate.ToString("dd/MM/yyyy HH:mm")</p>
+        </div>
+        <a asp-action="Detail" asp-route-id="@Model.AccountId" class="btn btn-light btn-modern">Cancelar</a>
+    </div>
+
+    <div class="content-card">
+        <div class="alert alert-warning">
+            Se anulará el pago de <strong>@Model.OriginalAmount.ToString("C")</strong>. Volverá a computarse como deuda y el movimiento permanecerá en el historial.
+        </div>
+        <form asp-action="VoidPayment" method="post" class="row g-3">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="paymentId" value="@Model.PaymentId" />
+            <div class="col-12">
+                <label for="reason" class="form-label">Motivo de la anulación</label>
+                <input id="reason" name="reason" class="form-control" maxlength="500" required
+                       placeholder="Ej.: pago registrado por error" />
+            </div>
+            <div class="col-12 d-flex justify-content-end gap-2">
+                <a asp-action="Detail" asp-route-id="@Model.AccountId" class="btn btn-light btn-modern">Cancelar</a>
+                <button type="submit" class="btn btn-danger btn-modern">Confirmar anulación</button>
+            </div>
+        </form>
+    </div>
+</div>

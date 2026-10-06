@@ -25,14 +25,20 @@
         </a>
     </div>
 
-    <div class="row g-3 mb-4">
-        <div class="col-md-3">
+    <div class="row row-cols-1 row-cols-md-2 row-cols-xl-5 g-3 mb-4">
+        <div class="col">
             <div class="detail-metric-card">
                 <div class="detail-metric-label">Deuda actual</div>
                 <div class="detail-metric-value text-danger">@Model.CurrentDebt.ToString("C")</div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col">
+            <div class="detail-metric-card">
+                <div class="detail-metric-label">Saldo a favor</div>
+                <div class="detail-metric-value text-success">@Model.CurrentCredit.ToString("C")</div>
+            </div>
+        </div>
+        <div class="col">
             <div class="detail-metric-card">
                 <div class="detail-metric-label">Adeuda desde</div>
                 <div class="detail-metric-value">
@@ -40,19 +46,26 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col">
             <div class="detail-metric-card">
                 <div class="detail-metric-label">Dirección</div>
                 <div class="detail-metric-value">@(Model.Account.Address ?? "-")</div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col">
             <div class="detail-metric-card">
                 <div class="detail-metric-label">Saldo inicial cargado</div>
                 <div class="detail-metric-value">@Model.Account.OpeningBalance.ToString("C")</div>
             </div>
         </div>
     </div>
+
+    @if (Model.CurrentCredit > 0)
+    {
+        <div class="alert alert-success">
+            Esta cuenta tiene <strong>@Model.CurrentCredit.ToString("C") a favor</strong>. El importe se aplicará automáticamente a las próximas compras realizadas en cuenta personal.
+        </div>
+    }
 
     @if (Model.Account.OpeningBalance > 0)
     {
@@ -156,6 +169,8 @@
                         <th>Monto</th>
                         <th>Usuario</th>
                         <th>Observación</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
                     </tr>
                 </thead>
             </table>

@@ -20,7 +20,19 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
-        builder.Entity<PersonalAccountPayment>().HasIndex(p => p.OperationId).IsUnique();
+        builder.Entity<PersonalAccountPayment>(entity =>
+        {
+            entity.HasIndex(p => p.OperationId).IsUnique();
+            entity.HasIndex(p => p.ReplacesPaymentId).IsUnique();
+            entity.HasOne(p => p.ReplacesPayment)
+                .WithMany()
+                .HasForeignKey(p => p.ReplacesPaymentId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(p => p.VoidedByUser)
+                .WithMany()
+                .HasForeignKey(p => p.VoidedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
         builder.Entity<PersonalAccount>().Property(p => p.OpeningBalance).HasPrecision(18, 2);
         builder.Entity<DirectSaleReturn>().HasIndex(p => p.OperationId).IsUnique();
         builder.Entity<Expense>().HasIndex(p => p.OperationId).IsUnique();

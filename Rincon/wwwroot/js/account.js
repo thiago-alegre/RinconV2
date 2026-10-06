@@ -20,6 +20,10 @@ $(function () {
                 }
             },
             {
+                data: "credit",
+                render: credit => `<span class="fw-bold text-success">${formatAccountMoney(credit)}</span>`
+            },
+            {
                 data: "debtSince",
                 render: value => value || "-"
             },

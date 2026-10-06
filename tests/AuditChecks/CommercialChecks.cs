@@ -74,6 +74,10 @@ static class CommercialChecks
         check(await db.Products.CountAsync() == productsBeforeLooseSale && shirt.Quantity == shirtStockBeforeLooseSale,
             "loose product neither creates a product nor changes stock");
 
+        var looseVoidHtml = await client.GetStringAsync("/Employee/Sales/Void/" + looseSale.Id);
+        check(looseVoidHtml.Contains("<th>Precio</th>") && looseVoidHtml.Contains("25,50") &&
+              !looseVoidHtml.Contains("<th>Disponible</th>"),
+            "cancellation identifies loose items by price without a redundant available column");
         var looseVoidForm = await Form("/Employee/Sales/Void/" + looseSale.Id);
         looseVoidForm["SaleId"] = looseSale.Id.ToString();
         looseVoidForm["Lines[0].DirectSaleItemId"] = looseItem.Id.ToString();
@@ -158,8 +162,26 @@ static class CommercialChecks
         check(shirt.Quantity == 49 && blanket.Quantity == 50,
             "each cancelled line follows its own restock selection");
         var balance = await AccountLedger.Accounts(db).SingleAsync(item => item.Id == account.Id);
-        check(balance.DebtValue == 0,
-            "a settled account remains at zero without credit after cancellation");
+        check(balance.DebtValue == 0 && balance.CreditValue == 600m,
+            "cancelling a paid sale preserves the excess payment as account credit");
+
+        var saleCoveredByCredit = new DirectSale
+        {
+            OperationId = Guid.NewGuid(),
+            PersonalAccountId = account.Id,
+            PaymentMethod = Rincon.Utilities.Enums.PaymentMethod.CuentaPersonal,
+            Date = DateTime.Now.AddSeconds(1),
+            Total = 250m
+        };
+        db.DirectSales.Add(saleCoveredByCredit);
+        await db.SaveChangesAsync();
+        var balanceAfterCreditUse = await AccountLedger.Accounts(db)
+            .SingleAsync(item => item.Id == account.Id);
+        var saleBalanceAfterCreditUse = await AccountLedger.Sales(db)
+            .SingleAsync(item => item.Id == saleCoveredByCredit.Id);
+        check(balanceAfterCreditUse.DebtValue == 0 && balanceAfterCreditUse.CreditValue == 350m &&
+              saleBalanceAfterCreditUse.AmountPaid == 250m,
+            "a later account sale automatically consumes available credit");
 
         var history = await client.GetStringAsync("/Employee/Accounts/GetCancellations?id=" + account.Id);
         check(history.Contains("Remera") && history.Contains("Manta"),
@@ -171,5 +193,69 @@ static class CommercialChecks
         check(accountProductsAfterCancellation.Contains($"\"saleId\":{sale.Id}") &&
               accountProductsAfterCancellation.Contains("\"canCancel\":false"),
             "account products disable cancellation after the whole sale is cancelled");
+
+        var paymentAuditAccount = new PersonalAccount
+        {
+            FullName = "Payment audit regression",
+            DNI = Guid.NewGuid().ToString(),
+            isActive = true
+        };
+        db.PersonalAccounts.Add(paymentAuditAccount);
+        await db.SaveChangesAsync();
+        db.DirectSales.Add(new DirectSale
+        {
+            OperationId = Guid.NewGuid(),
+            PersonalAccountId = paymentAuditAccount.Id,
+            PaymentMethod = Rincon.Utilities.Enums.PaymentMethod.CuentaPersonal,
+            Date = DateTime.Now,
+            Total = 100m
+        });
+        await db.SaveChangesAsync();
+
+        var auditPaymentForm = await Form("/Employee/Accounts/Detail/" + paymentAuditAccount.Id);
+        auditPaymentForm["Id"] = paymentAuditAccount.Id.ToString();
+        auditPaymentForm["AmountText"] = "60";
+        auditPaymentForm["PaymentMethod"] = "1";
+        check((await Post("/Employee/Accounts/Pay", auditPaymentForm)).StatusCode == HttpStatusCode.Redirect,
+            "payment to be corrected is registered");
+        var originalPayment = await db.PersonalAccountPayments.AsNoTracking()
+            .SingleAsync(item => item.OperationId == Guid.Parse(auditPaymentForm["OperationId"]));
+
+        var editHtml = await client.GetStringAsync("/Employee/Accounts/EditPayment/" + originalPayment.Id);
+        var editForm = new Dictionary<string, string>
+        {
+            ["__RequestVerificationToken"] = field(editHtml, "__RequestVerificationToken"),
+            ["PaymentId"] = originalPayment.Id.ToString(),
+            ["AccountId"] = paymentAuditAccount.Id.ToString(),
+            ["AmountText"] = "40",
+            ["PaymentMethod"] = "2",
+            ["Reason"] = "Corrección de prueba"
+        };
+        check((await Post("/Employee/Accounts/EditPayment", editForm)).StatusCode == HttpStatusCode.Redirect,
+            "payment can be corrected with an audited replacement");
+        var correctedPayment = await db.PersonalAccountPayments.AsNoTracking()
+            .SingleAsync(item => item.ReplacesPaymentId == originalPayment.Id);
+        var refreshedOriginal = await db.PersonalAccountPayments.AsNoTracking()
+            .SingleAsync(item => item.Id == originalPayment.Id);
+        check(refreshedOriginal.IsVoided && correctedPayment.Amount == 40m &&
+              correctedPayment.PaymentMethod == Rincon.Utilities.Enums.PaymentMethod.Transferencia,
+            "correction preserves the voided original and activates the replacement");
+        check((await AccountLedger.Accounts(db).SingleAsync(item => item.Id == paymentAuditAccount.Id)).DebtValue == 60m,
+            "only the corrected payment reduces account debt");
+
+        var voidHtml = await client.GetStringAsync("/Employee/Accounts/VoidPayment/" + correctedPayment.Id);
+        var voidForm = new Dictionary<string, string>
+        {
+            ["__RequestVerificationToken"] = field(voidHtml, "__RequestVerificationToken"),
+            ["paymentId"] = correctedPayment.Id.ToString(),
+            ["reason"] = "Anulación de prueba"
+        };
+        check((await Post("/Employee/Accounts/VoidPayment", voidForm)).StatusCode == HttpStatusCode.Redirect,
+            "active payment can be voided without deletion");
+        check((await AccountLedger.Accounts(db).SingleAsync(item => item.Id == paymentAuditAccount.Id)).DebtValue == 100m,
+            "voided payments no longer reduce account debt");
+        check(await db.PersonalAccountPayments.CountAsync(item =>
+                item.PersonalAccountId == paymentAuditAccount.Id && item.IsVoided) == 2,
+            "payment history retains original and replacement as voided audit records");
     }
 }

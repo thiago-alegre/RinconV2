@@ -1,0 +1,48 @@
+@model Rincon.Models.ViewModels.PersonalAccountPaymentChangeVM
+@{
+    ViewData["Title"] = "Modificar pago";
+}
+
+<div class="admin-page py-4">
+    <div class="admin-hero admin-hero-toolbar mb-4">
+        <div>
+            <span class="admin-eyebrow">Cuenta personal</span>
+            <h1 class="admin-title h3 mb-1">Modificar pago #@Model.PaymentId</h1>
+            <p class="admin-subtitle mb-0">@Model.AccountName · @Model.OriginalDate.ToString("dd/MM/yyyy HH:mm")</p>
+        </div>
+        <a asp-action="Detail" asp-route-id="@Model.AccountId" class="btn btn-light btn-modern">Cancelar</a>
+    </div>
+
+    <div class="content-card">
+        <form asp-action="EditPayment" method="post" class="row g-3">
+            @Html.AntiForgeryToken()
+            <input asp-for="PaymentId" type="hidden" />
+            <input asp-for="AccountId" type="hidden" />
+
+            <div class="col-md-4">
+                <label asp-for="AmountText" class="form-label">Monto</label>
+                <input asp-for="AmountText" class="form-control" inputmode="decimal" autocomplete="off" required />
+            </div>
+            <div class="col-md-4">
+                <label asp-for="PaymentMethod" class="form-label">Medio</label>
+                <select asp-for="PaymentMethod" class="form-select">
+                    <option value="1">Efectivo</option>
+                    <option value="2">Transferencia</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label asp-for="Notes" class="form-label">Observación</label>
+                <input asp-for="Notes" class="form-control" maxlength="500" />
+            </div>
+            <div class="col-12">
+                <label asp-for="Reason" class="form-label">Motivo de la modificación</label>
+                <input asp-for="Reason" class="form-control" maxlength="500" required
+                       placeholder="Ej.: monto o medio de pago cargado incorrectamente" />
+            </div>
+            <div class="col-12 d-flex justify-content-end gap-2">
+                <a asp-action="Detail" asp-route-id="@Model.AccountId" class="btn btn-light btn-modern">Cancelar</a>
+                <button type="submit" class="btn btn-primary btn-modern">Guardar corrección</button>
+            </div>
+        </form>
+    </div>
+</div>

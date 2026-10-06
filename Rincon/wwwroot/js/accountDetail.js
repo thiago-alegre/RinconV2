@@ -65,7 +65,35 @@ $(function () {
                 render: value => `<span class="fw-bold text-success">${formatAccountDetailMoney(value)}</span>`
             },
             { data: "user" },
-            { data: "notes" }
+            {
+                data: "notes",
+                render: (value, type, row) => type === "display" && row.voidReason
+                    ? `${escapeAccountDetailHtml(value)}<div class="small text-danger">${escapeAccountDetailHtml(row.voidReason)}</div>`
+                    : type === "display" ? escapeAccountDetailHtml(value) : value
+            },
+            {
+                data: "status",
+                orderable: false,
+                render: (value, type, row) => type === "display"
+                    ? `<span class="status-badge ${row.statusClass}">${value}</span>`
+                    : value
+            },
+            {
+                data: null,
+                orderable: false,
+                searchable: false,
+                render: (_value, type, row) => {
+                    if (type !== "display") return "";
+                    const paymentId = Number(row.id);
+                    if (!row.canManage || !Number.isInteger(paymentId) || paymentId <= 0) {
+                        return '<span class="text-muted">Sin acciones</span>';
+                    }
+                    return `<div class="d-flex gap-1">
+                        <a class="btn btn-outline-primary btn-sm" href="/Employee/Accounts/EditPayment/${paymentId}">Modificar</a>
+                        <a class="btn btn-outline-danger btn-sm" href="/Employee/Accounts/VoidPayment/${paymentId}">Anular</a>
+                    </div>`;
+                }
+            }
         ]
     });
 
@@ -93,4 +121,8 @@ function formatAccountDetailMoney(value) {
         style: "currency",
         currency: "ARS"
     });
+}
+
+function escapeAccountDetailHtml(value) {
+    return $("<div>").text(value ?? "").html();
 }
