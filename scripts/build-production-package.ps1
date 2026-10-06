@@ -28,7 +28,10 @@ New-Item -ItemType Directory -Path $app -Force | Out-Null
 
 Push-Location $repo
 try {
-    dotnet build .\Rincon.sln -c Release
+    dotnet restore .\Rincon.sln --disable-parallel
+    if ($LASTEXITCODE -ne 0) { throw 'Falló la restauración de dependencias.' }
+
+    dotnet build .\Rincon.sln -c Release --no-restore -m:1
     if ($LASTEXITCODE -ne 0) { throw 'Falló la compilación Release.' }
 
     dotnet ef migrations has-pending-model-changes `
