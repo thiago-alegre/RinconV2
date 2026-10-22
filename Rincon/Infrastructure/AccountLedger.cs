@@ -37,6 +37,14 @@ public static class AccountLedger
                let sold = sales.Where(s => s.AccountId == account.Id).Sum(s => (decimal?)s.Total) ?? 0m
                let paid = db.PersonalAccountPayments.Where(p => p.PersonalAccountId == account.Id && !p.IsVoided).Sum(p => (decimal?)p.Amount) ?? 0m
                let refunded = db.DirectSaleReturns.Where(r => r.DirectSale.PersonalAccountId == account.Id && r.RefundMethod != PaymentMethod.CuentaPersonal).Sum(r => (decimal?)r.Total) ?? 0m
+               let lastPaymentDate = db.PersonalAccountPayments
+                   .Where(p => p.PersonalAccountId == account.Id && !p.IsVoided)
+                   .OrderByDescending(p => p.Date).ThenByDescending(p => p.Id)
+                   .Select(p => (DateTime?)p.Date).FirstOrDefault()
+               let lastPaymentAmount = db.PersonalAccountPayments
+                   .Where(p => p.PersonalAccountId == account.Id && !p.IsVoided)
+                   .OrderByDescending(p => p.Date).ThenByDescending(p => p.Id)
+                   .Select(p => (decimal?)p.Amount).FirstOrDefault()
                let rawBalance = account.OpeningBalance + sold - paid + refunded
                select new AccountBalance
                {
@@ -44,6 +52,8 @@ public static class AccountLedger
                    Phone = account.Phone, Address = account.Address, isActive = account.isActive,
                    DebtValue = Math.Max(0m, rawBalance),
                    CreditValue = Math.Max(0m, -rawBalance),
+                   LastPaymentDateValue = lastPaymentDate,
+                   LastPaymentAmountValue = lastPaymentAmount,
                    DebtSinceValue = rawBalance <= 0m
                        ? null
                        : account.OpeningBalance > Math.Max(0m, paid - refunded)
@@ -73,4 +83,6 @@ public sealed class AccountBalance
     public decimal DebtValue { get; set; }
     public decimal CreditValue { get; set; }
     public DateTime? DebtSinceValue { get; set; }
+    public DateTime? LastPaymentDateValue { get; set; }
+    public decimal? LastPaymentAmountValue { get; set; }
 }

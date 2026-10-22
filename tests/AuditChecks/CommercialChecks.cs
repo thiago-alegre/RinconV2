@@ -120,6 +120,13 @@ static class CommercialChecks
         paymentForm["PaymentMethod"] = "1";
         check((await Post("/Employee/Accounts/Pay", paymentForm)).StatusCode == HttpStatusCode.Redirect,
             "personal account can be settled");
+        var accountsWithLastPayment = await client.GetStringAsync(
+            "/Employee/Accounts/GetAll?search[value]=" + Uri.EscapeDataString(account.DNI));
+        check(accountsWithLastPayment.Contains("\"lastPaymentAmount\":675") &&
+              accountsWithLastPayment.Contains("\"lastPaymentDate\":\"") &&
+              !accountsWithLastPayment.Contains("\"dni\":") &&
+              !accountsWithLastPayment.Contains("\"credit\":"),
+            "account list exposes the latest active payment date and amount without DNI or credit columns");
 
         var partial = await Form("/Employee/Sales/Void/" + sale.Id);
         partial["SaleId"] = sale.Id.ToString();
@@ -257,5 +264,10 @@ static class CommercialChecks
         check(await db.PersonalAccountPayments.CountAsync(item =>
                 item.PersonalAccountId == paymentAuditAccount.Id && item.IsVoided) == 2,
             "payment history retains original and replacement as voided audit records");
+        var accountsWithoutVoidedPayment = await client.GetStringAsync(
+            "/Employee/Accounts/GetAll?search[value]=" + Uri.EscapeDataString(paymentAuditAccount.DNI));
+        check(accountsWithoutVoidedPayment.Contains("\"lastPaymentAmount\":null") &&
+              accountsWithoutVoidedPayment.Contains("\"lastPaymentDate\":null"),
+            "voided payments are excluded from the latest payment shown in the account list");
     }
 }

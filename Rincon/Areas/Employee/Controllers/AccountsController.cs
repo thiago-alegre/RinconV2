@@ -47,11 +47,16 @@ public class AccountsController : Controller
                 EF.Functions.ILike(account.DNI, search.Pattern) ||
                 (account.Phone != null && EF.Functions.ILike(account.Phone, search.Pattern)) ||
                 (account.Address != null && EF.Functions.ILike(account.Address, search.Pattern)) ||
-                (search.HasNumber && (account.DebtValue == search.Number || account.CreditValue == search.Number)) ||
-                (date != null && account.DebtSinceValue.HasValue &&
-                    account.DebtSinceValue.Value.Day == date.Day &&
-                    account.DebtSinceValue.Value.Month == date.Month &&
-                    (!date.Year.HasValue || account.DebtSinceValue.Value.Year == date.Year.Value)) ||
+                (search.HasNumber && (account.DebtValue == search.Number || account.LastPaymentAmountValue == search.Number)) ||
+                (date != null && (
+                    (account.DebtSinceValue.HasValue &&
+                        account.DebtSinceValue.Value.Day == date.Day &&
+                        account.DebtSinceValue.Value.Month == date.Month &&
+                        (!date.Year.HasValue || account.DebtSinceValue.Value.Year == date.Year.Value)) ||
+                    (account.LastPaymentDateValue.HasValue &&
+                        account.LastPaymentDateValue.Value.Day == date.Day &&
+                        account.LastPaymentDateValue.Value.Month == date.Month &&
+                        (!date.Year.HasValue || account.LastPaymentDateValue.Value.Year == date.Year.Value)))) ||
                 (matchesActive && account.isActive) ||
                 (matchesInactive && !account.isActive));
         }
@@ -64,20 +69,20 @@ public class AccountsController : Controller
                 ? query.OrderBy(account => account.FullName)
                 : query.OrderByDescending(account => account.FullName),
             1 => request.IsAscending
-                ? query.OrderBy(account => account.DNI)
-                : query.OrderByDescending(account => account.DNI),
-            2 => request.IsAscending
                 ? query.OrderBy(account => account.Phone)
                 : query.OrderByDescending(account => account.Phone),
-            3 => request.IsAscending
+            2 => request.IsAscending
                 ? query.OrderBy(account => account.DebtValue)
                 : query.OrderByDescending(account => account.DebtValue),
-            4 => request.IsAscending
-                ? query.OrderBy(account => account.CreditValue)
-                : query.OrderByDescending(account => account.CreditValue),
-            5 => request.IsAscending
+            3 => request.IsAscending
                 ? query.OrderBy(account => account.DebtSinceValue)
                 : query.OrderByDescending(account => account.DebtSinceValue),
+            4 => request.IsAscending
+                ? query.OrderBy(account => account.LastPaymentDateValue)
+                : query.OrderByDescending(account => account.LastPaymentDateValue),
+            5 => request.IsAscending
+                ? query.OrderBy(account => account.LastPaymentAmountValue)
+                : query.OrderByDescending(account => account.LastPaymentAmountValue),
             6 => request.IsAscending
                 ? query.OrderBy(account => account.isActive)
                 : query.OrderByDescending(account => account.isActive),
@@ -98,12 +103,12 @@ public class AccountsController : Controller
             {
                 account.Id,
                 account.FullName,
-                account.DNI,
                 account.Phone,
                 account.isActive,
                 debt = debt.Amount,
-                credit = debt.Credit,
-                debtSince = debt.Since?.ToString("dd/MM/yyyy")
+                debtSince = debt.Since?.ToString("dd/MM/yyyy"),
+                lastPaymentDate = account.LastPaymentDateValue?.ToString("dd/MM/yyyy HH:mm"),
+                lastPaymentAmount = account.LastPaymentAmountValue
             };
         });
 

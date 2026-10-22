@@ -7,7 +7,6 @@ $(function () {
         },
         columns: [
             { data: "fullName" },
-            { data: "dni" },
             {
                 data: "phone",
                 render: value => value || "-"
@@ -20,12 +19,18 @@ $(function () {
                 }
             },
             {
-                data: "credit",
-                render: credit => `<span class="fw-bold text-success">${formatAccountMoney(credit)}</span>`
-            },
-            {
                 data: "debtSince",
                 render: value => value || "-"
+            },
+            {
+                data: "lastPaymentDate",
+                render: value => value || "-"
+            },
+            {
+                data: "lastPaymentAmount",
+                render: value => value == null
+                    ? "-"
+                    : `<span class="fw-bold text-success">${formatAccountMoney(value)}</span>`
             },
             {
                 data: "isActive",
